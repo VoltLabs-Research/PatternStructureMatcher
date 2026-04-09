@@ -2,6 +2,12 @@
 
 `PatternStructureMatching` classifies atoms by matching them against dynamic lattice YAML definitions.
 
+## One-Command Install
+
+```bash
+curl -sSL https://raw.githubusercontent.com/VoltLabs-Research/CoreToolkit/main/scripts/install-plugin.sh | bash -s -- PatternStructureMatching
+```
+
 ## CLI
 
 Usage:
@@ -21,19 +27,3 @@ pattern-structure-matching <lammps_file> [output_base] [options]
 | `--patterns <csv>` | No | Optional lattice filter, for example `fcc,bcc`. | all lattices |
 | `--dissolveSmallClusters` | No | Mark small clusters as `OTHER` after clustering. | `false` |
 | `--help` | No | Print CLI help. | |
-
-## Build With CoreToolkit
-
-```bash
-cd /path/to/voltlabs-ecosystem/tools/CoreToolkit
-conan create . -nr
-
-cd /path/to/voltlabs-ecosystem/plugins/StructureIdentification
-conan create . -nr
-
-cd /path/to/voltlabs-ecosystem/plugins/CommonNeighborAnalysis
-conan create . -nr
-
-cd /path/to/voltlabs-ecosystem/plugins/PatternStructureMatching
-conan create . -nr
-```
