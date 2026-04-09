@@ -1,7 +1,6 @@
 #include <volt/analysis/pattern_dxa_topology_provider.h>
 
 #include <volt/analysis/crystal_symmetry_utils.h>
-#include <volt/analysis/crystal_topology_library.h>
 #include <volt/structures/neighbor_bond_array.h>
 
 #include <stdexcept>
@@ -18,55 +17,6 @@ const Vector3& zeroVector(){
 const Matrix3& identityMatrix(){
     static const Matrix3 matrix = Matrix3::Identity();
     return matrix;
-}
-
-PatternSymmetryPermutation convertSymmetry(const SharedCrystalSymmetryPermutation& source){
-    PatternSymmetryPermutation symmetry;
-    symmetry.transformation = source.transformation;
-    symmetry.permutation = source.permutation;
-    symmetry.inverseProduct = source.inverseProduct;
-    return symmetry;
-}
-
-bool buildTopologyDataFromTopologyName(
-    std::string_view latticeName,
-    int expectedCoordinationNumber,
-    PatternDxaTopologyProvider::TopologyData& outData
-){
-    if(latticeName.empty()){
-        return false;
-    }
-
-    const SharedCrystalTopology* topology = sharedCrystalTopology(latticeName);
-    if(!topology || topology->coordinationNumber <= 0){
-        return false;
-    }
-    if(expectedCoordinationNumber > 0 && topology->coordinationNumber != expectedCoordinationNumber){
-        return false;
-    }
-
-    outData.coordinationNumber = topology->coordinationNumber;
-    outData.commonNeighbors.fill({-1, -1});
-    outData.name = std::string(latticeName);
-    for(int neighborIndex = 0; neighborIndex < topology->coordinationNumber; ++neighborIndex){
-        outData.commonNeighbors[static_cast<std::size_t>(neighborIndex)][0] =
-            topology->commonNeighbors[static_cast<std::size_t>(neighborIndex)][0];
-        outData.commonNeighbors[static_cast<std::size_t>(neighborIndex)][1] =
-            topology->commonNeighbors[static_cast<std::size_t>(neighborIndex)][1];
-    }
-
-    outData.symmetries.clear();
-    outData.symmetries.reserve(topology->symmetries.size());
-    for(const auto& permutation : topology->symmetries){
-        outData.symmetries.push_back(convertSymmetry(permutation));
-    }
-
-    outData.neighborVectors.clear();
-    outData.neighborVectors.reserve(static_cast<std::size_t>(topology->coordinationNumber));
-    for(int neighborIndex = 0; neighborIndex < topology->coordinationNumber; ++neighborIndex){
-        outData.neighborVectors.push_back(topology->neighborVectors[static_cast<std::size_t>(neighborIndex)]);
-    }
-    return true;
 }
 
 }
@@ -117,14 +67,11 @@ PatternDxaTopologyProvider::TopologyData PatternDxaTopologyProvider::buildTopolo
     }
 
     const int expectedCoordinationNumber = referenceMatcher ? referenceMatcher->coordinationNumber : -1;
-    if(buildTopologyDataFromTopologyName(pattern.name, expectedCoordinationNumber, data)){
-        return data;
-    }
     if(!referenceMatcher){
         return data;
     }
 
-    data.coordinationNumber = referenceMatcher->coordinationNumber;
+    data.coordinationNumber = expectedCoordinationNumber;
     data.neighborVectors = referenceMatcher->canonicalNeighborVectors;
     data.symmetries = referenceMatcher->symmetries;
     if(data.symmetries.empty()){

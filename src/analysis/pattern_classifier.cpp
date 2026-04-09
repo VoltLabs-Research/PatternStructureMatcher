@@ -1,7 +1,6 @@
 #include <volt/analysis/pattern_classifier.h>
 
 #include <volt/analysis/crystal_symmetry_utils.h>
-#include <volt/analysis/crystal_topology_library.h>
 #include <volt/analysis/nearest_neighbor_finder.h>
 #include <volt/analysis/pattern_dxa_topology_provider.h>
 #include <volt/analysis/pattern_matching_shared.h>
@@ -15,8 +14,6 @@
 #include <stdexcept>
 
 namespace Volt {
-
-constexpr double kPatternCanonicalVectorTolerance = 1e-4;
 
 bool matchGenericLocalMatcherImpl(
     const CompiledPattern& pattern,
@@ -173,57 +170,6 @@ bool matchGenericLocalMatcher(
     );
 }
 
-void canonicalizeSharedTopologyMatch(const CompiledPattern& pattern, PatternAtomMatch& match){
-    if(match.structureType == StructureType::OTHER){
-        return;
-    }
-
-    const SharedCrystalTopology* topology = sharedCrystalTopology(pattern.name);
-    if(!topology || topology->coordinationNumber <= 0 || match.coordinationNumber != topology->coordinationNumber){
-        return;
-    }
-
-    std::array<Vector3, MAX_NEIGHBORS> canonicalVectors;
-    std::array<int, MAX_NEIGHBORS> canonicalNeighbors;
-    canonicalVectors.fill(Vector3::Zero());
-    canonicalNeighbors.fill(-1);
-    std::array<bool, MAX_NEIGHBORS> consumed{};
-    consumed.fill(false);
-
-    for(int canonicalSlot = 0; canonicalSlot < topology->coordinationNumber; ++canonicalSlot){
-        const Vector3& expectedVector = topology->neighborVectors[static_cast<std::size_t>(canonicalSlot)];
-        int matchedSlot = -1;
-        for(int slot = 0; slot < match.coordinationNumber; ++slot){
-            if(consumed[static_cast<std::size_t>(slot)]){
-                continue;
-            }
-            if((match.idealNeighborVectors[static_cast<std::size_t>(slot)] - expectedVector)
-                .isZero(kPatternCanonicalVectorTolerance)){
-                matchedSlot = slot;
-                break;
-            }
-        }
-        if(matchedSlot < 0){
-            return;
-        }
-        consumed[static_cast<std::size_t>(matchedSlot)] = true;
-        canonicalVectors[static_cast<std::size_t>(canonicalSlot)] = expectedVector;
-        canonicalNeighbors[static_cast<std::size_t>(canonicalSlot)] =
-            match.orderedNeighborIndices[static_cast<std::size_t>(matchedSlot)];
-    }
-
-    match.idealNeighborVectors = canonicalVectors;
-    match.orderedNeighborIndices = canonicalNeighbors;
-    match.allowedSymmetryMask = AnalysisSymmetryUtils::fullSymmetryMask(
-        static_cast<int>(topology->symmetries.size())
-    );
-    const int identityLikeSymmetry = findClosestSharedCrystalSymmetryPermutation(
-        *topology,
-        Matrix3::Identity()
-    );
-    match.symmetryPermutation = identityLikeSymmetry >= 0 ? identityLikeSymmetry : 0;
-}
-
 bool matchPatternAtom(
     const CompiledPattern& pattern,
     const NearestNeighborFinder& neighFinder,
@@ -241,7 +187,6 @@ bool matchPatternAtom(
             atomTypes,
             outMatch
         )){
-            canonicalizeSharedTopologyMatch(pattern, outMatch);
             return true;
         }
     }
