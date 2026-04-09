@@ -33,17 +33,13 @@ PatternTemplateSource parsePatternSourceFile(const std::filesystem::path& filePa
     PatternTemplateSource source;
     source.definitionPath = filePath;
     source.name = document["name"].as<std::string>();
-    source.innerCutoff = document["inner_cutoff"].as<double>();
-    source.outerCutoff = document["outer_cutoff"].as<double>();
+    source.coordinationNumber = document["coordination_number"].as<int>();
 
     if(source.name.empty()){
         throw std::runtime_error("Lattice name cannot be empty.");
     }
-    if(source.innerCutoff <= 0.0){
-        throw std::runtime_error("inner_cutoff must be positive.");
-    }
-    if(source.outerCutoff <= source.innerCutoff){
-        throw std::runtime_error("outer_cutoff must be greater than inner_cutoff.");
+    if(source.coordinationNumber <= 0 || source.coordinationNumber > MAX_NEIGHBORS){
+        throw std::runtime_error("coordination_number must be between 1 and MAX_NEIGHBORS.");
     }
 
     return source;

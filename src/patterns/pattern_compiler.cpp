@@ -153,20 +153,115 @@ int appendOrResolveLocalMatcherIndex(
     return static_cast<int>(localMatchers.size()) - 1;
 }
 
-std::vector<PatternNeighborCandidate> gatherNeighborsWithinCutoff(
-    const TemplateStructureData& templateData,
-    int centerAtomIndex,
-    double outerCutoff,
-    int imageRadius
+int findIdentitySymmetryIndex(const std::vector<PatternSymmetryPermutation>& symmetries){
+    if(symmetries.empty()){
+        return -1;
+    }
+    return AnalysisSymmetryUtils::findClosestSymmetryPermutation(symmetries, Matrix3::Identity());
+}
+
+const Vector3& transformedCanonicalNeighborVector(
+    const CompiledPatternLocalMatcher& matcher,
+    int symmetryIndex,
+    int slot
 ){
-    auto neighbors = gatherPeriodicNeighbors(templateData, centerAtomIndex, imageRadius);
-    neighbors.erase(
-        std::remove_if(neighbors.begin(), neighbors.end(), [&](const auto& candidate){
-            return candidate.distance > outerCutoff + 1e-8;
-        }),
-        neighbors.end()
-    );
-    return neighbors;
+    if(slot < 0 || slot >= matcher.coordinationNumber){
+        static const Vector3 zero = Vector3::Zero();
+        return zero;
+    }
+    const auto& symmetry = matcher.symmetries[static_cast<std::size_t>(symmetryIndex)];
+    const int mappedSlot = symmetry.permutation[static_cast<std::size_t>(slot)];
+    if(mappedSlot < 0 || mappedSlot >= matcher.coordinationNumber){
+        static const Vector3 zero = Vector3::Zero();
+        return zero;
+    }
+    return matcher.canonicalNeighborVectors[static_cast<std::size_t>(mappedSlot)];
+}
+
+int countMatchingLocalOverlap(
+    const CompiledPatternLocalMatcher& matcher,
+    int currentSymmetry,
+    int neighborSlot,
+    int neighborSymmetry,
+    int reverseSlot
+){
+    int commonNeighborCount = 0;
+    for(int currentSlot = 0; currentSlot < matcher.coordinationNumber; ++currentSlot){
+        if(currentSlot == neighborSlot){
+            continue;
+        }
+
+        const Vector3 expectedFromNeighbor =
+            transformedCanonicalNeighborVector(matcher, currentSymmetry, currentSlot) -
+            transformedCanonicalNeighborVector(matcher, currentSymmetry, neighborSlot);
+
+        for(int neighborCandidateSlot = 0; neighborCandidateSlot < matcher.coordinationNumber; ++neighborCandidateSlot){
+            if(neighborCandidateSlot == reverseSlot){
+                continue;
+            }
+            if(!(expectedFromNeighbor - transformedCanonicalNeighborVector(
+                matcher,
+                neighborSymmetry,
+                neighborCandidateSlot
+            )).isZero(kPatternShellDistanceTolerance)){
+                continue;
+            }
+
+            ++commonNeighborCount;
+            break;
+        }
+    }
+
+    return commonNeighborCount;
+}
+
+bool requiresOrientationFallback(const CompiledPatternLocalMatcher& matcher){
+    if(matcher.symmetries.empty() || matcher.coordinationNumber <= 0){
+        return false;
+    }
+
+    const int identitySymmetry = findIdentitySymmetryIndex(matcher.symmetries);
+    if(identitySymmetry < 0){
+        return false;
+    }
+
+    for(int neighborIndex = 0; neighborIndex < matcher.coordinationNumber; ++neighborIndex){
+        const Vector3 currentBond = transformedCanonicalNeighborVector(
+            matcher,
+            identitySymmetry,
+            neighborIndex
+        );
+        bool hasUsableOverlap = false;
+
+        for(int neighborSymmetry = 0; neighborSymmetry < static_cast<int>(matcher.symmetries.size()) && !hasUsableOverlap; ++neighborSymmetry){
+            for(int reverseSlot = 0; reverseSlot < matcher.coordinationNumber; ++reverseSlot){
+                const Vector3 neighborBond = transformedCanonicalNeighborVector(
+                    matcher,
+                    neighborSymmetry,
+                    reverseSlot
+                );
+                if(!(currentBond + neighborBond).isZero(kPatternShellDistanceTolerance)){
+                    continue;
+                }
+                if(countMatchingLocalOverlap(
+                    matcher,
+                    identitySymmetry,
+                    neighborIndex,
+                    neighborSymmetry,
+                    reverseSlot
+                ) >= 2){
+                    hasUsableOverlap = true;
+                    break;
+                }
+            }
+        }
+
+        if(!hasUsableOverlap){
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void initializeIdentitySymmetry(
@@ -182,6 +277,15 @@ void initializeIdentitySymmetry(
     symmetries.push_back(std::move(identity));
 }
 
+void retainProperRotations(std::vector<PatternSymmetryPermutation>& symmetries){
+    symmetries.erase(
+        std::remove_if(symmetries.begin(), symmetries.end(), [](const PatternSymmetryPermutation& symmetry){
+            return symmetry.transformation.determinant() <= 0.0;
+        }),
+        symmetries.end()
+    );
+}
+
 void buildGenericSymmetries(
     const std::vector<Vector3>& canonicalNeighborVectors,
     std::vector<PatternSymmetryPermutation>& symmetries
@@ -194,6 +298,7 @@ void buildGenericSymmetries(
             canonicalNeighborVectors,
             symmetries
         );
+        retainProperRotations(symmetries);
         AnalysisSymmetryUtils::calculateSymmetryProducts(symmetries);
         if(symmetries.empty()){
             initializeIdentitySymmetry(canonicalNeighborVectors, symmetries);
@@ -209,28 +314,20 @@ bool compileGenericLocalMatcherForAtom(
     int atomIndex,
     CompiledPatternLocalMatcher& outMatcher
 ){
-    const auto neighbors = gatherNeighborsWithinCutoff(templateData, atomIndex, source.outerCutoff, 1);
-    if(neighbors.empty()){
+    const auto neighbors = gatherPeriodicNeighbors(templateData, atomIndex, 1);
+    if(static_cast<int>(neighbors.size()) < source.coordinationNumber){
         return false;
     }
 
-    int coordinationNumber = 0;
-    while(
-        coordinationNumber < static_cast<int>(neighbors.size()) &&
-        neighbors[static_cast<std::size_t>(coordinationNumber)].distance < source.innerCutoff - 1e-8
-    ){
-        ++coordinationNumber;
-    }
+    const int coordinationNumber = source.coordinationNumber;
     if(coordinationNumber <= 0 || coordinationNumber > MAX_NEIGHBORS){
         return false;
     }
 
     const double lastInnerRadius = neighbors[static_cast<std::size_t>(coordinationNumber - 1)].distance;
-    double firstOuterRadius = source.outerCutoff;
+    double firstOuterRadius = lastInnerRadius * 1.1;
     if(coordinationNumber < static_cast<int>(neighbors.size())){
         firstOuterRadius = neighbors[static_cast<std::size_t>(coordinationNumber)].distance;
-    }else{
-        firstOuterRadius = std::max(source.outerCutoff, lastInnerRadius * 1.1);
     }
 
     if(firstOuterRadius <= lastInnerRadius + 1e-8){
@@ -298,6 +395,7 @@ bool compileGenericLocalMatcherForAtom(
     matcher.sortedCnaSignatures = matcher.cnaSignatures;
     std::sort(matcher.sortedCnaSignatures.begin(), matcher.sortedCnaSignatures.end());
     buildGenericSymmetries(matcher.canonicalNeighborVectors, matcher.symmetries);
+    matcher.requiresOrientationFallback = requiresOrientationFallback(matcher);
 
     outMatcher = std::move(matcher);
     return true;
@@ -333,8 +431,7 @@ CompiledPattern compilePattern(
 ){
     CompiledPattern pattern;
     pattern.name = source.name;
-    pattern.innerCutoff = source.innerCutoff;
-    pattern.outerCutoff = source.outerCutoff;
+    pattern.coordinationNumber = source.coordinationNumber;
     pattern.structureType = static_cast<int>(StructureType::OTHER);
     pattern.supportedForLocalMatching = false;
     pattern.requiresAtomTypes = false;

@@ -1,6 +1,5 @@
 name: sc
-inner_cutoff: 1.5
-outer_cutoff: 1.9
+coordination_number: 6
 
 cell:
   - [1.0, 0.0, 0.0]

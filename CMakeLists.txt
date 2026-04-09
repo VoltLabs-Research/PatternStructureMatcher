@@ -39,7 +39,6 @@ set(LIB_SOURCES
     ${CMAKE_SOURCE_DIR}/src/analysis/pattern_classifier.cpp
     ${CMAKE_SOURCE_DIR}/src/analysis/pattern_matching_shared.cpp
     ${CMAKE_SOURCE_DIR}/src/analysis/pattern_dxa_topology_provider.cpp
-    ${CMAKE_SOURCE_DIR}/src/analysis/pattern_cluster_rule_provider.cpp
     ${CMAKE_SOURCE_DIR}/src/patterns/pattern_catalog.cpp
     ${CMAKE_SOURCE_DIR}/src/patterns/pattern_source_loader.cpp
     ${CMAKE_SOURCE_DIR}/src/patterns/template_structure_loader.cpp

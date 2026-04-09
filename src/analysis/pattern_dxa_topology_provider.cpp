@@ -66,12 +66,11 @@ PatternDxaTopologyProvider::TopologyData PatternDxaTopologyProvider::buildTopolo
         }
     }
 
-    const int expectedCoordinationNumber = referenceMatcher ? referenceMatcher->coordinationNumber : -1;
     if(!referenceMatcher){
         return data;
     }
 
-    data.coordinationNumber = expectedCoordinationNumber;
+    data.coordinationNumber = referenceMatcher->coordinationNumber;
     data.neighborVectors = referenceMatcher->canonicalNeighborVectors;
     data.symmetries = referenceMatcher->symmetries;
     if(data.symmetries.empty()){

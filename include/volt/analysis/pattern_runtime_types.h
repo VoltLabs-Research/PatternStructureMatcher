@@ -18,8 +18,7 @@ namespace Volt {
 struct PatternTemplateSource {
     std::string name;
     std::filesystem::path definitionPath;
-    double innerCutoff = 0.0;
-    double outerCutoff = 0.0;
+    int coordinationNumber = 0;
 };
 
 struct TemplateStructureData {
@@ -72,13 +71,13 @@ struct CompiledPatternLocalMatcher {
     std::vector<PatternCnaSignature> cnaSignatures;
     std::vector<PatternCnaSignature> sortedCnaSignatures;
     std::vector<PatternSymmetryPermutation> symmetries;
+    bool requiresOrientationFallback = false;
 };
 
 struct CompiledPattern {
     int id = -1;
     std::string name;
-    double innerCutoff = 0.0;
-    double outerCutoff = 0.0;
+    int coordinationNumber = 0;
     bool supportedForLocalMatching = false;
     bool requiresAtomTypes = false;
     int structureType = static_cast<int>(StructureType::OTHER);
@@ -98,6 +97,8 @@ struct PatternAtomMatch {
     int coordinationNumber = 0;
     std::uint64_t allowedSymmetryMask = 0;
     int symmetryPermutation = -1;
+    Matrix3 orientation = Matrix3::Identity();
+    bool orientationValid = false;
     std::array<int, MAX_NEIGHBORS> orderedNeighborIndices;
     std::array<Vector3, MAX_NEIGHBORS> idealNeighborVectors;
 };
@@ -114,6 +115,8 @@ struct PatternDxaAtomState {
     int coordinationNumber = 0;
     std::uint64_t allowedSymmetryMask = 0;
     int symmetryPermutation = -1;
+    Matrix3 orientation = Matrix3::Identity();
+    bool orientationValid = false;
     std::array<int, MAX_NEIGHBORS> neighborAtomIndices;
     std::array<Vector3, MAX_NEIGHBORS> idealNeighborVectors;
 

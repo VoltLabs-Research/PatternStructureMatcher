@@ -1,6 +1,17 @@
+# -----------------------------------------------------------------------------
+# Hexagonal Close-Packed Lattice
+# -----------------------------------------------------------------------------
+#
+# For additional examples, detailed explanations, and the full specification,
+# please refer to the official documentation:
+#
+#   https://docs.voltcloud.dev
+#   https://github.com/voltlabs-research/
+#
+# -----------------------------------------------------------------------------
+
 name: hcp
-inner_cutoff: 0.8
-outer_cutoff: 1.1
+coordination_number: 12
 
 scale: 0.7071067811865475
 

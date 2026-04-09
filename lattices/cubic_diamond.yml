@@ -1,6 +1,17 @@
+# -----------------------------------------------------------------------------
+# Cubic Diamond Lattice
+# -----------------------------------------------------------------------------
+#
+# For additional examples, detailed explanations, and the full specification,
+# please refer to the official documentation:
+#
+#   https://docs.voltcloud.dev
+#   https://github.com/voltlabs-research/
+#
+# -----------------------------------------------------------------------------
+
 name: cubic_diamond
-inner_cutoff: 0.72
-outer_cutoff: 1.01
+coordination_number: 16
 
 cell:
   - [0.0, 0.5, 0.5]

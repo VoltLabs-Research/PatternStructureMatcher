@@ -1,6 +1,17 @@
+# -----------------------------------------------------------------------------
+# Hex Diamond Lattice
+# -----------------------------------------------------------------------------
+#
+# For additional examples, detailed explanations, and the full specification,
+# please refer to the official documentation:
+#
+#   https://docs.voltcloud.dev
+#   https://github.com/voltlabs-research/
+#
+# -----------------------------------------------------------------------------
+
 name: hex_diamond
-inner_cutoff: 1.01
-outer_cutoff: 1.03
+coordination_number: 16
 
 cell:
   - [0.5, -0.86602540378443864676, 0.0]

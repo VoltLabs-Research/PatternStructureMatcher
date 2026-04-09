@@ -11,9 +11,332 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <limits>
 #include <stdexcept>
 
 namespace Volt {
+
+namespace{
+
+bool orthonormalizeMatrix(const Matrix3& input, Matrix3& output){
+    Vector3 c0 = input.column(0);
+    Vector3 c1 = input.column(1);
+    Vector3 c2 = input.column(2);
+
+    const double l0 = c0.length();
+    if(l0 <= EPSILON){
+        return false;
+    }
+    c0 /= l0;
+
+    c1 -= c0 * c0.dot(c1);
+    const double l1 = c1.length();
+    if(l1 <= EPSILON){
+        return false;
+    }
+    c1 /= l1;
+
+    c2 -= c0 * c0.dot(c2);
+    c2 -= c1 * c1.dot(c2);
+    const double l2 = c2.length();
+    if(l2 <= EPSILON){
+        return false;
+    }
+    c2 /= l2;
+
+    output = Matrix3(c0, c1, c2);
+    if(output.determinant() < 0.0){
+        output.column(2) = -output.column(2);
+    }
+    return true;
+}
+
+bool lexicographicallyGreaterMatrix(const Matrix3& lhs, const Matrix3& rhs){
+    constexpr double epsilon = 1e-8;
+    for(int row = 0; row < 3; ++row){
+        for(int column = 0; column < 3; ++column){
+            const double delta = lhs(row, column) - rhs(row, column);
+            if(std::abs(delta) <= epsilon){
+                continue;
+            }
+            return delta > 0.0;
+        }
+    }
+    return false;
+}
+
+void permuteCanonicalToRuntimeBySymmetry(
+    const std::vector<int>& canonicalToRuntime,
+    const PatternSymmetryPermutation& symmetry,
+    int coordinationNumber,
+    std::vector<int>& outCanonicalToRuntime
+){
+    outCanonicalToRuntime.assign(static_cast<std::size_t>(coordinationNumber), -1);
+
+    std::array<int, MAX_NEIGHBORS> inversePermutation{};
+    inversePermutation.fill(-1);
+    for(int slot = 0; slot < coordinationNumber; ++slot){
+        const int mappedSlot = symmetry.permutation[static_cast<std::size_t>(slot)];
+        if(mappedSlot >= 0 && mappedSlot < coordinationNumber){
+            inversePermutation[static_cast<std::size_t>(mappedSlot)] = slot;
+        }
+    }
+
+    for(int canonicalSlot = 0; canonicalSlot < coordinationNumber; ++canonicalSlot){
+        const int inverseSlot = inversePermutation[static_cast<std::size_t>(canonicalSlot)];
+        if(inverseSlot < 0 || inverseSlot >= coordinationNumber){
+            continue;
+        }
+        outCanonicalToRuntime[static_cast<std::size_t>(canonicalSlot)] =
+            canonicalToRuntime[static_cast<std::size_t>(inverseSlot)];
+    }
+}
+
+double orientationAssignmentError(
+    const CompiledPatternLocalMatcher& matcher,
+    const NearestNeighborFinder::Query<MAX_NEIGHBORS>& query,
+    const std::vector<int>& canonicalToRuntime,
+    const Matrix3& orientation
+){
+    double error = 0.0;
+    for(int canonicalSlot = 0; canonicalSlot < matcher.coordinationNumber; ++canonicalSlot){
+        const int runtimeSlot = canonicalToRuntime[static_cast<std::size_t>(canonicalSlot)];
+        if(runtimeSlot < 0 || runtimeSlot >= static_cast<int>(query.results().size())){
+            return std::numeric_limits<double>::infinity();
+        }
+
+        Vector3 expected = orientation * matcher.canonicalNeighborVectors[static_cast<std::size_t>(canonicalSlot)];
+        Vector3 actual = query.results()[runtimeSlot].delta;
+        const double expectedLength = expected.length();
+        const double actualLength = actual.length();
+        if(expectedLength <= EPSILON || actualLength <= EPSILON){
+            return std::numeric_limits<double>::infinity();
+        }
+
+        expected /= expectedLength;
+        actual /= actualLength;
+        const double dot = std::clamp(expected.dot(actual), -1.0, 1.0);
+        error += 1.0 - dot;
+    }
+    return error;
+}
+
+bool computeMatchOrientation(
+    const CompiledPatternLocalMatcher& matcher,
+    const NearestNeighborFinder::Query<MAX_NEIGHBORS>& query,
+    const std::vector<int>& canonicalToRuntime,
+    Matrix3& outOrientation
+){
+    if(static_cast<int>(canonicalToRuntime.size()) < matcher.coordinationNumber || matcher.coordinationNumber < 3){
+        return false;
+    }
+
+    Matrix3 orientationV = Matrix3::Zero();
+    Matrix3 orientationW = Matrix3::Zero();
+
+    for(int canonicalSlot = 0; canonicalSlot < matcher.coordinationNumber; ++canonicalSlot){
+        const int runtimeSlot = canonicalToRuntime[static_cast<std::size_t>(canonicalSlot)];
+        if(runtimeSlot < 0 || runtimeSlot >= static_cast<int>(query.results().size())){
+            return false;
+        }
+
+        const Vector3& idealVector = matcher.canonicalNeighborVectors[static_cast<std::size_t>(canonicalSlot)];
+        const Vector3& spatialVector = query.results()[runtimeSlot].delta;
+        for(int i = 0; i < 3; ++i){
+            for(int j = 0; j < 3; ++j){
+                orientationV(i, j) += idealVector[j] * idealVector[i];
+                orientationW(i, j) += idealVector[j] * spatialVector[i];
+            }
+        }
+    }
+
+    Matrix3 orientationVInverse;
+    if(!orientationV.inverse(orientationVInverse)){
+        return false;
+    }
+
+    const Matrix3 rawOrientation = Matrix3(orientationW * orientationVInverse);
+    return orthonormalizeMatrix(rawOrientation, outOrientation);
+}
+
+double matrixTrace(const Matrix3& matrix){
+    return matrix(0, 0) + matrix(1, 1) + matrix(2, 2);
+}
+
+bool reduceOrientationToFundamentalZone(
+    const CompiledPatternLocalMatcher& matcher,
+    const NearestNeighborFinder::Query<MAX_NEIGHBORS>& query,
+    std::vector<int>& inOutCanonicalToRuntime,
+    Matrix3& inOutOrientation
+){
+    if(matcher.symmetries.empty()){
+        return false;
+    }
+
+    std::vector<int> bestCanonicalToRuntime = inOutCanonicalToRuntime;
+    Matrix3 bestOrientation = inOutOrientation;
+    double bestTrace = matrixTrace(inOutOrientation);
+    double bestError = orientationAssignmentError(
+        matcher,
+        query,
+        inOutCanonicalToRuntime,
+        inOutOrientation
+    );
+    bool changed = false;
+
+    for(const PatternSymmetryPermutation& symmetry : matcher.symmetries){
+        std::vector<int> candidateCanonicalToRuntime;
+        permuteCanonicalToRuntimeBySymmetry(
+            inOutCanonicalToRuntime,
+            symmetry,
+            matcher.coordinationNumber,
+            candidateCanonicalToRuntime
+        );
+
+        Matrix3 candidateOrientation;
+        if(!computeMatchOrientation(
+            matcher,
+            query,
+            candidateCanonicalToRuntime,
+            candidateOrientation
+        )){
+            continue;
+        }
+
+        const double candidateTrace = matrixTrace(candidateOrientation);
+        const double candidateError = orientationAssignmentError(
+            matcher,
+            query,
+            candidateCanonicalToRuntime,
+            candidateOrientation
+        );
+
+        const bool preferCandidate =
+            candidateTrace > bestTrace + 1e-8 ||
+            (std::abs(candidateTrace - bestTrace) <= 1e-8 && candidateError < bestError - 1e-8) ||
+            (std::abs(candidateTrace - bestTrace) <= 1e-8 &&
+             std::abs(candidateError - bestError) <= 1e-8 &&
+             lexicographicallyGreaterMatrix(candidateOrientation, bestOrientation));
+
+        if(!preferCandidate){
+            continue;
+        }
+
+        bestCanonicalToRuntime = std::move(candidateCanonicalToRuntime);
+        bestOrientation = candidateOrientation;
+        bestTrace = candidateTrace;
+        bestError = candidateError;
+        changed = true;
+    }
+
+    if(changed){
+        inOutCanonicalToRuntime = std::move(bestCanonicalToRuntime);
+        inOutOrientation = bestOrientation;
+    }
+    return changed;
+}
+
+bool assignBestOrientationFallbackPermutation(
+    const CompiledPatternLocalMatcher& matcher,
+    const std::vector<PatternCnaSignature>& runtimeSignatures,
+    const NeighborBondArray& runtimeNeighborArray,
+    const NearestNeighborFinder::Query<MAX_NEIGHBORS>& query,
+    std::vector<int>& outCanonicalToRuntime,
+    Matrix3& outOrientation
+){
+    std::vector<int> currentCanonicalToRuntime(static_cast<std::size_t>(matcher.coordinationNumber), -1);
+    std::vector<int> bestCanonicalToRuntime = currentCanonicalToRuntime;
+    std::vector<unsigned char> usedRuntimeSlots(static_cast<std::size_t>(matcher.coordinationNumber), 0);
+    Matrix3 bestOrientation = Matrix3::Identity();
+    double bestError = std::numeric_limits<double>::infinity();
+    bool foundBest = false;
+
+    std::function<void(int)> visit = [&](int canonicalSlot){
+        if(canonicalSlot == matcher.coordinationNumber){
+            Matrix3 candidateOrientation;
+            if(!computeMatchOrientation(
+                matcher,
+                query,
+                currentCanonicalToRuntime,
+                candidateOrientation
+            )){
+                return;
+            }
+
+            const double candidateError = orientationAssignmentError(
+                matcher,
+                query,
+                currentCanonicalToRuntime,
+                candidateOrientation
+            );
+            const bool preferCandidate =
+                !foundBest ||
+                candidateError < bestError - 1e-8 ||
+                (std::abs(candidateError - bestError) <= 1e-8 &&
+                 lexicographicallyGreaterMatrix(candidateOrientation, bestOrientation));
+            if(!preferCandidate){
+                return;
+            }
+
+            foundBest = true;
+            bestError = candidateError;
+            bestOrientation = candidateOrientation;
+            bestCanonicalToRuntime = currentCanonicalToRuntime;
+            return;
+        }
+
+        const PatternCnaSignature& expectedSignature =
+            matcher.cnaSignatures[static_cast<std::size_t>(canonicalSlot)];
+
+        for(int runtimeSlot = 0; runtimeSlot < matcher.coordinationNumber; ++runtimeSlot){
+            if(usedRuntimeSlots[static_cast<std::size_t>(runtimeSlot)]){
+                continue;
+            }
+            if(!(runtimeSignatures[static_cast<std::size_t>(runtimeSlot)] == expectedSignature)){
+                continue;
+            }
+
+            bool bondsMatch = true;
+            for(int previousCanonicalSlot = 0; previousCanonicalSlot < canonicalSlot; ++previousCanonicalSlot){
+                const int previousRuntimeSlot =
+                    currentCanonicalToRuntime[static_cast<std::size_t>(previousCanonicalSlot)];
+                if(previousRuntimeSlot < 0){
+                    continue;
+                }
+
+                const bool runtimeBond = runtimeNeighborArray.neighborBond(runtimeSlot, previousRuntimeSlot);
+                const bool expectedBond =
+                    (matcher.neighborBondRows[static_cast<std::size_t>(canonicalSlot)] &
+                     (1u << previousCanonicalSlot)) != 0;
+                if(runtimeBond != expectedBond){
+                    bondsMatch = false;
+                    break;
+                }
+            }
+            if(!bondsMatch){
+                continue;
+            }
+
+            currentCanonicalToRuntime[static_cast<std::size_t>(canonicalSlot)] = runtimeSlot;
+            usedRuntimeSlots[static_cast<std::size_t>(runtimeSlot)] = 1;
+            visit(canonicalSlot + 1);
+            usedRuntimeSlots[static_cast<std::size_t>(runtimeSlot)] = 0;
+            currentCanonicalToRuntime[static_cast<std::size_t>(canonicalSlot)] = -1;
+        }
+    };
+
+    visit(0);
+    if(!foundBest){
+        return false;
+    }
+
+    outCanonicalToRuntime = std::move(bestCanonicalToRuntime);
+    outOrientation = bestOrientation;
+    return true;
+}
+
+}
 
 bool matchGenericLocalMatcherImpl(
     const CompiledPattern& pattern,
@@ -97,21 +420,49 @@ bool matchGenericLocalMatcherImpl(
         return false;
     }
 
+    constexpr int kExhaustiveOrientationFallbackCoordinationLimit = 8;
+
     std::vector<int> canonicalToRuntime;
-    if(!assignGenericCnaPermutation(
-        matcher,
-        runtimeSignatures,
-        runtimeNeighborArray,
-        canonicalToRuntime
-    )){
-        return false;
+    Matrix3 canonicalOrientation = Matrix3::Identity();
+    bool canonicalOrientationValid = false;
+    int canonicalSymmetryPermutation = -1;
+    const bool useExhaustiveOrientationFallback =
+        matcher.requiresOrientationFallback &&
+        matcher.coordinationNumber <= kExhaustiveOrientationFallbackCoordinationLimit;
+
+    if(useExhaustiveOrientationFallback){
+        if(!assignBestOrientationFallbackPermutation(
+            matcher,
+            runtimeSignatures,
+            runtimeNeighborArray,
+            query,
+            canonicalToRuntime,
+            canonicalOrientation
+        )){
+            return false;
+        }
+        canonicalOrientationValid = true;
+    }else{
+        if(!assignGenericCnaPermutation(
+            matcher,
+            runtimeSignatures,
+            runtimeNeighborArray,
+            canonicalToRuntime
+        )){
+            return false;
+        }
     }
 
-    std::vector<int> canonicalNeighborAtomIndices(static_cast<std::size_t>(matcher.coordinationNumber), -1);
-    for(int canonicalSlot = 0; canonicalSlot < matcher.coordinationNumber; ++canonicalSlot){
-        canonicalNeighborAtomIndices[static_cast<std::size_t>(canonicalSlot)] =
-            query.results()[canonicalToRuntime[static_cast<std::size_t>(canonicalSlot)]].index;
-    }
+    auto buildCanonicalNeighborAtomIndices = [&](const std::vector<int>& slotMapping){
+        std::vector<int> indices(static_cast<std::size_t>(matcher.coordinationNumber), -1);
+        for(int canonicalSlot = 0; canonicalSlot < matcher.coordinationNumber; ++canonicalSlot){
+            indices[static_cast<std::size_t>(canonicalSlot)] =
+                query.results()[slotMapping[static_cast<std::size_t>(canonicalSlot)]].index;
+        }
+        return indices;
+    };
+
+    std::vector<int> canonicalNeighborAtomIndices = buildCanonicalNeighborAtomIndices(canonicalToRuntime);
     if(!matchSpeciesWithSymmetry(
         matcher,
         canonicalNeighborAtomIndices,
@@ -122,6 +473,71 @@ bool matchGenericLocalMatcherImpl(
         return false;
     }
 
+    if(!useExhaustiveOrientationFallback && matcher.requiresOrientationFallback && !matcher.symmetries.empty()){
+        std::vector<int> bestCanonicalToRuntime = canonicalToRuntime;
+        Matrix3 bestOrientation = Matrix3::Identity();
+        double bestError = std::numeric_limits<double>::infinity();
+        bool foundBest = false;
+
+        for(const PatternSymmetryPermutation& symmetry : matcher.symmetries){
+            std::vector<int> candidateCanonicalToRuntime;
+            permuteCanonicalToRuntimeBySymmetry(
+                canonicalToRuntime,
+                symmetry,
+                matcher.coordinationNumber,
+                candidateCanonicalToRuntime
+            );
+
+            Matrix3 candidateOrientation;
+            if(!computeMatchOrientation(
+                matcher,
+                query,
+                candidateCanonicalToRuntime,
+                candidateOrientation
+            )){
+                continue;
+            }
+
+            const double candidateError = orientationAssignmentError(
+                matcher,
+                query,
+                candidateCanonicalToRuntime,
+                candidateOrientation
+            );
+            const bool preferCandidate =
+                !foundBest ||
+                candidateError < bestError - 1e-8 ||
+                (std::abs(candidateError - bestError) <= 1e-8 &&
+                 lexicographicallyGreaterMatrix(candidateOrientation, bestOrientation));
+
+            if(!preferCandidate){
+                continue;
+            }
+
+            foundBest = true;
+            bestError = candidateError;
+            bestOrientation = candidateOrientation;
+            bestCanonicalToRuntime = std::move(candidateCanonicalToRuntime);
+        }
+
+        if(foundBest){
+            canonicalToRuntime = std::move(bestCanonicalToRuntime);
+            canonicalNeighborAtomIndices = buildCanonicalNeighborAtomIndices(canonicalToRuntime);
+            canonicalOrientation = bestOrientation;
+            canonicalOrientationValid = true;
+        }
+    }
+
+    if(matcher.requiresOrientationFallback && canonicalOrientationValid){
+        reduceOrientationToFundamentalZone(
+            matcher,
+            query,
+            canonicalToRuntime,
+            canonicalOrientation
+        );
+        canonicalNeighborAtomIndices = buildCanonicalNeighborAtomIndices(canonicalToRuntime);
+    }
+
     outMatch = PatternAtomMatch{};
     outMatch.patternId = pattern.id;
     outMatch.structureType = pattern.structureType;
@@ -129,7 +545,26 @@ bool matchGenericLocalMatcherImpl(
     outMatch.localCutoff = localCutoff;
     outMatch.coordinationNumber = matcher.coordinationNumber;
     outMatch.allowedSymmetryMask = AnalysisSymmetryUtils::fullSymmetryMask(static_cast<int>(matcher.symmetries.size()));
-    outMatch.symmetryPermutation = -1;
+    outMatch.symmetryPermutation = canonicalSymmetryPermutation;
+    outMatch.orientationValid = canonicalOrientationValid;
+    outMatch.orientation = canonicalOrientation;
+    if(!outMatch.orientationValid){
+        outMatch.symmetryPermutation = -1;
+        outMatch.orientationValid = computeMatchOrientation(
+            matcher,
+            query,
+            canonicalToRuntime,
+            outMatch.orientation
+        );
+    }
+    if(outMatch.orientationValid && !matcher.symmetries.empty() && !matcher.requiresOrientationFallback){
+        if(outMatch.symmetryPermutation < 0){
+            outMatch.symmetryPermutation = AnalysisSymmetryUtils::findClosestSymmetryPermutation(
+                matcher.symmetries,
+                outMatch.orientation
+            );
+        }
+    }
     for(int canonicalSlot = 0; canonicalSlot < matcher.coordinationNumber; ++canonicalSlot){
         outMatch.idealNeighborVectors[static_cast<std::size_t>(canonicalSlot)] =
             matcher.canonicalNeighborVectors[static_cast<std::size_t>(canonicalSlot)];
@@ -295,6 +730,8 @@ void PatternClassifier::classify(StructureAnalysis& analysis){
         dxaState.coordinationNumber = match.coordinationNumber;
         dxaState.allowedSymmetryMask = match.allowedSymmetryMask;
         dxaState.symmetryPermutation = match.symmetryPermutation;
+        dxaState.orientation = match.orientation;
+        dxaState.orientationValid = match.orientationValid;
         dxaState.neighborAtomIndices = match.orderedNeighborIndices;
         dxaState.idealNeighborVectors = match.idealNeighborVectors;
         localCounts[atomIndex] = match.coordinationNumber;

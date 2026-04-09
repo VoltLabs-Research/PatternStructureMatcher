@@ -1,10 +1,12 @@
 #include <volt/analysis/pattern_service.h>
 
 #include <volt/analysis/cluster_graph_builder.h>
+#include <volt/analysis/crystal_symmetry_utils.h>
 #include <volt/analysis/pattern_catalog.h>
 #include <volt/analysis/pattern_classifier.h>
 #include <volt/analysis/pattern_cluster_input_adapter.h>
 #include <volt/analysis/pattern_dxa_topology_provider.h>
+#include <volt/analysis/orientation_cluster_rule_provider.h>
 #include <volt/analysis/pattern_structure_analysis.h>
 #include <volt/analysis/reconstructed_state_canonicalizer.h>
 #include <volt/analysis/reconstructed_analysis_pipeline.h>
@@ -246,6 +248,142 @@ void applyPatternNeighborVectorOverrides(
     );
 }
 
+std::shared_ptr<std::vector<OrientationClusterAtomState>> buildOrientationClusterStates(
+    const std::shared_ptr<const std::vector<PatternDxaAtomState>>& atomStates
+){
+    if(!atomStates){
+        return nullptr;
+    }
+
+    auto states = std::make_shared<std::vector<OrientationClusterAtomState>>(atomStates->size());
+    for(std::size_t atomIndex = 0; atomIndex < atomStates->size(); ++atomIndex){
+        const PatternDxaAtomState& source = (*atomStates)[atomIndex];
+        auto& target = (*states)[atomIndex];
+        target.orientation = source.orientation;
+        target.valid = source.orientationValid;
+        target.preferredSymmetry = source.symmetryPermutation;
+    }
+    return states;
+}
+
+bool orthonormalizeOrientationMatrix(const Matrix3& input, Matrix3& output){
+    Vector3 c0 = input.column(0);
+    Vector3 c1 = input.column(1);
+    Vector3 c2 = input.column(2);
+
+    const double l0 = c0.length();
+    if(l0 <= EPSILON){
+        return false;
+    }
+    c0 /= l0;
+
+    c1 -= c0 * c0.dot(c1);
+    const double l1 = c1.length();
+    if(l1 <= EPSILON){
+        return false;
+    }
+    c1 /= l1;
+
+    c2 -= c0 * c0.dot(c2);
+    c2 -= c1 * c1.dot(c2);
+    const double l2 = c2.length();
+    if(l2 <= EPSILON){
+        return false;
+    }
+    c2 /= l2;
+
+    output = Matrix3(c0, c1, c2);
+    if(output.determinant() < 0.0){
+        output.column(2) = -output.column(2);
+    }
+    return true;
+}
+
+std::shared_ptr<const std::vector<PatternDxaAtomState>> smoothOrientationFallbackStates(
+    const PatternCatalog& catalog,
+    const std::shared_ptr<const std::vector<PatternDxaAtomState>>& atomStates
+){
+    if(!atomStates){
+        return atomStates;
+    }
+
+    constexpr int kSmoothingIterations = 2;
+    auto current = std::make_shared<std::vector<PatternDxaAtomState>>(*atomStates);
+    auto next = std::make_shared<std::vector<PatternDxaAtomState>>(*atomStates);
+
+    for(int iteration = 0; iteration < kSmoothingIterations; ++iteration){
+        *next = *current;
+
+        for(std::size_t atomIndex = 0; atomIndex < current->size(); ++atomIndex){
+            const PatternDxaAtomState& state = (*current)[atomIndex];
+            if(!state.isMatched() || !state.orientationValid || state.patternId < 0){
+                continue;
+            }
+
+            const CompiledPattern& pattern = catalog.patternById(state.patternId);
+            if(state.localMatcherIndex < 0 ||
+               state.localMatcherIndex >= static_cast<int>(pattern.localMatchers.size())){
+                continue;
+            }
+
+            const CompiledPatternLocalMatcher& matcher =
+                pattern.localMatchers[static_cast<std::size_t>(state.localMatcherIndex)];
+            if(!matcher.requiresOrientationFallback || matcher.symmetries.empty()){
+                continue;
+            }
+
+            Matrix3 accumulated = state.orientation;
+            int contributionCount = 1;
+
+            const int neighborCount = std::min(state.coordinationNumber, static_cast<int>(MAX_NEIGHBORS));
+            for(int neighborSlot = 0; neighborSlot < neighborCount; ++neighborSlot){
+                const int neighborAtomIndex = state.neighborAtomIndices[static_cast<std::size_t>(neighborSlot)];
+                if(neighborAtomIndex < 0 ||
+                   neighborAtomIndex >= static_cast<int>(current->size()) ||
+                   neighborAtomIndex == static_cast<int>(atomIndex)){
+                    continue;
+                }
+
+                const PatternDxaAtomState& neighborState = (*current)[static_cast<std::size_t>(neighborAtomIndex)];
+                if(!neighborState.isMatched() ||
+                   !neighborState.orientationValid ||
+                   neighborState.structureType != state.structureType){
+                    continue;
+                }
+
+                const Matrix3 relative = Matrix3(neighborState.orientation.transposed() * state.orientation);
+                const int symmetryIndex = AnalysisSymmetryUtils::findClosestSymmetryPermutation(
+                    matcher.symmetries,
+                    relative
+                );
+                const Matrix3 alignedNeighborOrientation = Matrix3(
+                    neighborState.orientation *
+                    matcher.symmetries[static_cast<std::size_t>(symmetryIndex)].transformation
+                );
+
+                accumulated = Matrix3(accumulated + alignedNeighborOrientation);
+                ++contributionCount;
+            }
+
+            if(contributionCount <= 1){
+                continue;
+            }
+
+            Matrix3 smoothedOrientation;
+            if(!orthonormalizeOrientationMatrix(accumulated, smoothedOrientation)){
+                continue;
+            }
+
+            (*next)[atomIndex].orientation = smoothedOrientation;
+            (*next)[atomIndex].orientationValid = true;
+        }
+
+        std::swap(current, next);
+    }
+
+    return current;
+}
+
 void recomputeClusterOrientations(StructureAnalysis& analysis, AnalysisContext& context){
     for(Cluster* cluster : analysis.clusterGraph().clusters()){
         if(!cluster || cluster->id == 0 || cluster->structure == LATTICE_OTHER){
@@ -388,10 +526,12 @@ json PatternStructureMatchingService::compute(
         classifier.configureDxaClustering(analysis);
         computeMaximumNeighborDistanceFromPatterns(analysis);
 
-        ReconstructedStateCanonicalizer::canonicalizeConnectedStructureSymmetries(analysis, context);
-        ReconstructedStateCanonicalizer::canonicalizeNeighborShellsToExportConvention(analysis, context);
         PatternClusterInputAdapter clusterInputAdapter;
         clusterInputAdapter.prepare(analysis, context);
+        const auto smoothedAtomDxaStates = smoothOrientationFallbackStates(*catalog, atomDxaStates);
+        analysis.setClusterRuleProvider(
+            std::make_shared<OrientationClusterRuleProvider>(buildOrientationClusterStates(smoothedAtomDxaStates))
+        );
         ClusterBuilder clusterBuilder(analysis, context);
         clusterBuilder.build(_dissolveSmallClusters);
         normalizeReconstructedClusterGraphForExport(analysis, context);
