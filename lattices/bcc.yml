@@ -1,0 +1,14 @@
+name: bcc
+inner_cutoff: 1.2
+outer_cutoff: 1.5
+
+cell:
+  - [-0.5, 0.5, 0.5]
+  - [0.5, -0.5, 0.5]
+  - [0.5, 0.5, -0.5]
+
+coordinate_mode: fractional
+
+basis:
+  - species: 1
+    position: [0.0, 0.0, 0.0]

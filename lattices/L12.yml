@@ -1,0 +1,20 @@
+name: L12
+inner_cutoff: 0.8
+outer_cutoff: 1.1
+
+cell:
+  - [1.0, 0.0, 0.0]
+  - [0.0, 1.0, 0.0]
+  - [0.0, 0.0, 1.0]
+
+coordinate_mode: cartesian
+
+basis:
+  - species: 1
+    position: [0.0, 0.0, 0.0]
+  - species: 2
+    position: [0.0, 0.5, 0.5]
+  - species: 2
+    position: [0.5, 0.0, 0.5]
+  - species: 2
+    position: [0.5, 0.5, 0.0]

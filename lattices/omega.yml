@@ -1,0 +1,18 @@
+name: omega
+inner_cutoff: 0.75
+outer_cutoff: 1.0
+
+cell:
+  - [1.0, 0.0, 0.0]
+  - [0.5, 0.86602540378443864676, 0.0]
+  - [0.0, 0.0, 0.6123724356957945]
+
+coordinate_mode: cartesian
+
+basis:
+  - species: 1
+    position: [0.0, 0.0, 0.0]
+  - species: 1
+    position: [0.5, 0.2886751345948129, 0.30618621784789724]
+  - species: 1
+    position: [0.0, 0.5773502691896258, 0.30618621784789724]

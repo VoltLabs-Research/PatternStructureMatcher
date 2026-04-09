@@ -1,0 +1,14 @@
+name: fcc
+inner_cutoff: 0.8
+outer_cutoff: 1.1
+
+cell:
+  - [0.5, 0.5, 0.0]
+  - [0.5, 0.0, 0.5]
+  - [0.0, 0.5, 0.5]
+
+coordinate_mode: fractional
+
+basis:
+  - species: 1
+    position: [0.0, 0.0, 0.0]

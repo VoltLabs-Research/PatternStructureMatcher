@@ -1,0 +1,275 @@
+#include <volt/analysis/pattern_catalog.h>
+
+#include <volt/analysis/crystal_symmetry_utils.h>
+#include <volt/analysis/pattern_matching_shared.h>
+
+#include <algorithm>
+
+namespace Volt {
+
+namespace{
+
+struct PatternNeighborCandidate {
+    Vector3 vector = Vector3::Zero();
+    int species = 0;
+    double distance = 0.0;
+};
+
+Vector3 pointToVector(const Point3& point){
+    return Vector3(point.x(), point.y(), point.z());
+}
+
+std::vector<PatternNeighborCandidate> gatherPeriodicNeighbors(
+    const TemplateStructureData& templateData,
+    int centerAtomIndex,
+    int imageRadius
+){
+    std::vector<PatternNeighborCandidate> neighbors;
+    neighbors.reserve(
+        static_cast<std::size_t>((imageRadius * 2 + 1) * (imageRadius * 2 + 1) * (imageRadius * 2 + 1)) *
+        templateData.positions.size()
+    );
+
+    const Vector3 center = pointToVector(templateData.positions[static_cast<std::size_t>(centerAtomIndex)]);
+    for(int ix = -imageRadius; ix <= imageRadius; ++ix){
+        for(int iy = -imageRadius; iy <= imageRadius; ++iy){
+            for(int iz = -imageRadius; iz <= imageRadius; ++iz){
+                const Vector3 translation =
+                    templateData.cell.column(0) * static_cast<double>(ix) +
+                    templateData.cell.column(1) * static_cast<double>(iy) +
+                    templateData.cell.column(2) * static_cast<double>(iz);
+
+                for(std::size_t atomIndex = 0; atomIndex < templateData.positions.size(); ++atomIndex){
+                    if(ix == 0 && iy == 0 && iz == 0 && atomIndex == static_cast<std::size_t>(centerAtomIndex)){
+                        continue;
+                    }
+
+                    PatternNeighborCandidate candidate;
+                    candidate.vector = pointToVector(templateData.positions[atomIndex]) + translation - center;
+                    candidate.distance = candidate.vector.length();
+                    candidate.species = templateData.species[atomIndex];
+                    if(candidate.distance <= EPSILON){
+                        continue;
+                    }
+                    neighbors.push_back(candidate);
+                }
+            }
+        }
+    }
+
+    std::sort(neighbors.begin(), neighbors.end(), [](const auto& lhs, const auto& rhs){
+        if(std::abs(lhs.distance - rhs.distance) > 1e-8){
+            return lhs.distance < rhs.distance;
+        }
+        if(std::abs(lhs.vector.x() - rhs.vector.x()) > 1e-8){
+            return lhs.vector.x() < rhs.vector.x();
+        }
+        if(std::abs(lhs.vector.y() - rhs.vector.y()) > 1e-8){
+            return lhs.vector.y() < rhs.vector.y();
+        }
+        return lhs.vector.z() < rhs.vector.z();
+    });
+
+    return neighbors;
+}
+
+int appendOrResolveLocalMatcherIndex(
+    std::vector<CompiledPatternLocalMatcher>& localMatchers,
+    CompiledPatternLocalMatcher matcher
+){
+    const auto it = std::find_if(localMatchers.begin(), localMatchers.end(), [&](const auto& existing){
+        return equivalentLocalMatchers(existing, matcher);
+    });
+    if(it != localMatchers.end()){
+        return static_cast<int>(std::distance(localMatchers.begin(), it));
+    }
+    localMatchers.push_back(std::move(matcher));
+    return static_cast<int>(localMatchers.size()) - 1;
+}
+
+std::vector<PatternNeighborCandidate> gatherNeighborsWithinCutoff(
+    const TemplateStructureData& templateData,
+    int centerAtomIndex,
+    double outerCutoff,
+    int imageRadius
+){
+    auto neighbors = gatherPeriodicNeighbors(templateData, centerAtomIndex, imageRadius);
+    neighbors.erase(
+        std::remove_if(neighbors.begin(), neighbors.end(), [&](const auto& candidate){
+            return candidate.distance > outerCutoff + 1e-8;
+        }),
+        neighbors.end()
+    );
+    return neighbors;
+}
+
+void initializeIdentitySymmetry(
+    const std::vector<Vector3>& canonicalNeighborVectors,
+    std::vector<PatternSymmetryPermutation>& symmetries
+){
+    PatternSymmetryPermutation identity;
+    for(std::size_t i = 0; i < canonicalNeighborVectors.size() && i < identity.permutation.size(); ++i){
+        identity.permutation[i] = static_cast<int>(i);
+    }
+    identity.inverseProduct = {0};
+    symmetries.clear();
+    symmetries.push_back(std::move(identity));
+}
+
+void buildGenericSymmetries(
+    const std::vector<Vector3>& canonicalNeighborVectors,
+    std::vector<PatternSymmetryPermutation>& symmetries
+){
+    symmetries.clear();
+    try{
+        AnalysisSymmetryUtils::generateSymmetryPermutations(
+            canonicalNeighborVectors,
+            static_cast<int>(canonicalNeighborVectors.size()),
+            canonicalNeighborVectors,
+            symmetries
+        );
+        AnalysisSymmetryUtils::calculateSymmetryProducts(symmetries);
+        if(symmetries.empty()){
+            initializeIdentitySymmetry(canonicalNeighborVectors, symmetries);
+        }
+    }catch(...){
+        initializeIdentitySymmetry(canonicalNeighborVectors, symmetries);
+    }
+}
+
+bool compileGenericLocalMatcherForAtom(
+    const PatternTemplateSource& source,
+    const TemplateStructureData& templateData,
+    int atomIndex,
+    CompiledPatternLocalMatcher& outMatcher
+){
+    const auto neighbors = gatherNeighborsWithinCutoff(templateData, atomIndex, source.outerCutoff, 1);
+    if(neighbors.empty()){
+        return false;
+    }
+
+    int coordinationNumber = 0;
+    while(
+        coordinationNumber < static_cast<int>(neighbors.size()) &&
+        neighbors[static_cast<std::size_t>(coordinationNumber)].distance < source.innerCutoff - 1e-8
+    ){
+        ++coordinationNumber;
+    }
+    if(coordinationNumber <= 0 || coordinationNumber > MAX_NEIGHBORS){
+        return false;
+    }
+
+    const double lastInnerRadius = neighbors[static_cast<std::size_t>(coordinationNumber - 1)].distance;
+    double firstOuterRadius = source.outerCutoff;
+    if(coordinationNumber < static_cast<int>(neighbors.size())){
+        firstOuterRadius = neighbors[static_cast<std::size_t>(coordinationNumber)].distance;
+    }else{
+        firstOuterRadius = std::max(source.outerCutoff, lastInnerRadius * 1.1);
+    }
+
+    if(firstOuterRadius <= lastInnerRadius + 1e-8){
+        firstOuterRadius = lastInnerRadius * 1.1;
+    }
+
+    CompiledPatternLocalMatcher matcher;
+    matcher.kind = PatternLocalMatcherKind::GenericCna;
+    matcher.coordinationNumber = coordinationNumber;
+    matcher.localCutoff = 0.5 * (lastInnerRadius + firstOuterRadius);
+    matcher.cutoffGap = (firstOuterRadius - lastInnerRadius) * 0.2;
+    matcher.centerSpecies = templateData.species[static_cast<std::size_t>(atomIndex)];
+    matcher.requiresSpecies = std::any_of(
+        templateData.species.begin(),
+        templateData.species.end(),
+        [&](int species){ return species != matcher.centerSpecies; }
+    );
+    matcher.scaleFactors.resize(static_cast<std::size_t>(coordinationNumber), 0.0);
+    matcher.canonicalNeighborVectors.reserve(static_cast<std::size_t>(coordinationNumber));
+    matcher.neighborSpeciesByCanonicalSlot.reserve(static_cast<std::size_t>(coordinationNumber));
+    matcher.cnaSignatures.reserve(static_cast<std::size_t>(coordinationNumber));
+
+    for(int neighborIndex = 0; neighborIndex < coordinationNumber; ++neighborIndex){
+        const auto& candidate = neighbors[static_cast<std::size_t>(neighborIndex)];
+        matcher.canonicalNeighborVectors.push_back(candidate.vector);
+        matcher.neighborSpeciesByCanonicalSlot.push_back(candidate.species);
+        matcher.scaleFactors[static_cast<std::size_t>(neighborIndex)] =
+            1.0 / candidate.distance / static_cast<double>(coordinationNumber);
+    }
+
+    NeighborBondArray neighborArray;
+    const double cutoffSquared = matcher.localCutoff * matcher.localCutoff;
+    for(int ni1 = 0; ni1 < coordinationNumber; ++ni1){
+        neighborArray.setNeighborBond(ni1, ni1, false);
+        for(int ni2 = ni1 + 1; ni2 < coordinationNumber; ++ni2){
+            const bool bonded = (
+                matcher.canonicalNeighborVectors[static_cast<std::size_t>(ni1)] -
+                matcher.canonicalNeighborVectors[static_cast<std::size_t>(ni2)]
+            ).squaredLength() < cutoffSquared;
+            neighborArray.setNeighborBond(ni1, ni2, bonded);
+        }
+    }
+
+    for(int row = 0; row < 32; ++row){
+        matcher.neighborBondRows[static_cast<std::size_t>(row)] = neighborArray.neighborArray[row];
+    }
+
+    for(int neighborIndex = 0; neighborIndex < coordinationNumber; ++neighborIndex){
+        matcher.cnaSignatures.push_back(
+            computePatternCnaSignature(
+                neighborArray,
+                neighborIndex,
+                coordinationNumber
+            )
+        );
+    }
+    matcher.sortedCnaSignatures = matcher.cnaSignatures;
+    std::sort(matcher.sortedCnaSignatures.begin(), matcher.sortedCnaSignatures.end());
+    buildGenericSymmetries(matcher.canonicalNeighborVectors, matcher.symmetries);
+
+    outMatcher = std::move(matcher);
+    return true;
+}
+
+void compileGenericLocalMatchers(
+    CompiledPattern& pattern,
+    const PatternTemplateSource& source,
+    const TemplateStructureData& templateData
+){
+    pattern.localMatchers.clear();
+    for(int atomIndex = 0; atomIndex < static_cast<int>(templateData.positions.size()); ++atomIndex){
+        CompiledPatternLocalMatcher matcher;
+        if(!compileGenericLocalMatcherForAtom(source, templateData, atomIndex, matcher)){
+            continue;
+        }
+        appendOrResolveLocalMatcherIndex(pattern.localMatchers, std::move(matcher));
+    }
+
+    pattern.supportedForLocalMatching = !pattern.localMatchers.empty();
+    pattern.requiresAtomTypes = std::any_of(
+        pattern.localMatchers.begin(),
+        pattern.localMatchers.end(),
+        [](const auto& matcher){ return matcher.requiresSpecies; }
+    );
+}
+
+}
+
+CompiledPattern compilePattern(
+    const PatternTemplateSource& source,
+    const TemplateStructureData* templateData
+){
+    CompiledPattern pattern;
+    pattern.name = source.name;
+    pattern.innerCutoff = source.innerCutoff;
+    pattern.outerCutoff = source.outerCutoff;
+    pattern.structureType = static_cast<int>(StructureType::OTHER);
+    pattern.supportedForLocalMatching = false;
+    pattern.requiresAtomTypes = false;
+
+    if(templateData){
+        compileGenericLocalMatchers(pattern, source, *templateData);
+    }
+
+    return pattern;
+}
+
+}
