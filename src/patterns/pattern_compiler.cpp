@@ -9,11 +9,77 @@ namespace Volt {
 
 namespace{
 
+constexpr double kPatternShellDistanceTolerance = 1e-6;
+
 struct PatternNeighborCandidate {
     Vector3 vector = Vector3::Zero();
     int species = 0;
     double distance = 0.0;
 };
+
+struct NeighborShellRange {
+    int begin = 0;
+    int count = 0;
+    double averageDistance = 0.0;
+};
+
+bool approximatelySameDistance(double lhs, double rhs){
+    const double scale = std::max({1.0, std::abs(lhs), std::abs(rhs)});
+    return std::abs(lhs - rhs) <= kPatternShellDistanceTolerance * scale;
+}
+
+std::vector<NeighborShellRange> buildNeighborShellRanges(
+    const std::vector<PatternNeighborCandidate>& neighbors,
+    int coordinationNumber
+){
+    std::vector<NeighborShellRange> shells;
+    if(coordinationNumber <= 0){
+        return shells;
+    }
+
+    int shellBegin = 0;
+    double shellDistanceSum = neighbors.front().distance;
+    for(int neighborIndex = 1; neighborIndex < coordinationNumber; ++neighborIndex){
+        if(approximatelySameDistance(
+            neighbors[static_cast<std::size_t>(neighborIndex)].distance,
+            neighbors[static_cast<std::size_t>(neighborIndex - 1)].distance
+        )){
+            shellDistanceSum += neighbors[static_cast<std::size_t>(neighborIndex)].distance;
+            continue;
+        }
+
+        const int shellCount = neighborIndex - shellBegin;
+        shells.push_back({
+            shellBegin,
+            shellCount,
+            shellDistanceSum / static_cast<double>(shellCount)
+        });
+        shellBegin = neighborIndex;
+        shellDistanceSum = neighbors[static_cast<std::size_t>(neighborIndex)].distance;
+    }
+
+    const int finalShellCount = coordinationNumber - shellBegin;
+    shells.push_back({
+        shellBegin,
+        finalShellCount,
+        shellDistanceSum / static_cast<double>(finalShellCount)
+    });
+    return shells;
+}
+
+NeighborShellRange selectReferenceShell(const std::vector<NeighborShellRange>& shells){
+    NeighborShellRange best;
+    bool initialized = false;
+    for(const NeighborShellRange& shell : shells){
+        if(!initialized ||
+           shell.count > best.count ||
+           (shell.count == best.count && shell.averageDistance < best.averageDistance)){
+            best = shell;
+            initialized = true;
+        }
+    }
+    return best;
+}
 
 Vector3 pointToVector(const Point3& point){
     return Vector3(point.x(), point.y(), point.z());
@@ -175,14 +241,12 @@ bool compileGenericLocalMatcherForAtom(
     matcher.kind = PatternLocalMatcherKind::GenericCna;
     matcher.coordinationNumber = coordinationNumber;
     matcher.localCutoff = 0.5 * (lastInnerRadius + firstOuterRadius);
-    matcher.cutoffGap = (firstOuterRadius - lastInnerRadius) * 0.2;
     matcher.centerSpecies = templateData.species[static_cast<std::size_t>(atomIndex)];
     matcher.requiresSpecies = std::any_of(
         templateData.species.begin(),
         templateData.species.end(),
         [&](int species){ return species != matcher.centerSpecies; }
     );
-    matcher.scaleFactors.resize(static_cast<std::size_t>(coordinationNumber), 0.0);
     matcher.canonicalNeighborVectors.reserve(static_cast<std::size_t>(coordinationNumber));
     matcher.neighborSpeciesByCanonicalSlot.reserve(static_cast<std::size_t>(coordinationNumber));
     matcher.cnaSignatures.reserve(static_cast<std::size_t>(coordinationNumber));
@@ -191,9 +255,19 @@ bool compileGenericLocalMatcherForAtom(
         const auto& candidate = neighbors[static_cast<std::size_t>(neighborIndex)];
         matcher.canonicalNeighborVectors.push_back(candidate.vector);
         matcher.neighborSpeciesByCanonicalSlot.push_back(candidate.species);
-        matcher.scaleFactors[static_cast<std::size_t>(neighborIndex)] =
-            1.0 / candidate.distance / static_cast<double>(coordinationNumber);
     }
+
+    const std::vector<NeighborShellRange> shells = buildNeighborShellRanges(neighbors, coordinationNumber);
+    const NeighborShellRange referenceShell = selectReferenceShell(shells);
+    if(referenceShell.count <= 0 || referenceShell.averageDistance <= EPSILON){
+        return false;
+    }
+    matcher.referenceNeighborOffset = referenceShell.begin;
+    matcher.referenceNeighborCount = referenceShell.count;
+    matcher.cutoffMultiplier = matcher.localCutoff / referenceShell.averageDistance;
+    matcher.extraNeighborRejectIndex = coordinationNumber < static_cast<int>(neighbors.size())
+        ? coordinationNumber
+        : -1;
 
     NeighborBondArray neighborArray;
     const double cutoffSquared = matcher.localCutoff * matcher.localCutoff;

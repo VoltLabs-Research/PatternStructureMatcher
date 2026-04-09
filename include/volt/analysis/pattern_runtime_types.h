@@ -59,11 +59,13 @@ enum class PatternLocalMatcherKind {
 struct CompiledPatternLocalMatcher {
     PatternLocalMatcherKind kind = PatternLocalMatcherKind::GenericCna;
     int coordinationNumber = 0;
-    double cutoffGap = 0.0;
     double localCutoff = 0.0;
+    int referenceNeighborOffset = 0;
+    int referenceNeighborCount = 0;
+    double cutoffMultiplier = 0.0;
+    int extraNeighborRejectIndex = -1;
     int centerSpecies = 0;
     bool requiresSpecies = false;
-    std::vector<double> scaleFactors;
     std::vector<Vector3> canonicalNeighborVectors;
     std::vector<int> neighborSpeciesByCanonicalSlot;
     std::array<unsigned int, 32> neighborBondRows{};

@@ -36,31 +36,39 @@ bool matchGenericLocalMatcherImpl(
         return false;
     }
 
-    double localScale = 0.0;
-    for(int neighborSlot = 0; neighborSlot < matcher.coordinationNumber; ++neighborSlot){
-        localScale += std::sqrt(query.results()[neighborSlot].distanceSq) *
-            matcher.scaleFactors[static_cast<std::size_t>(neighborSlot)];
+    if(matcher.referenceNeighborCount <= 0 ||
+       matcher.referenceNeighborOffset < 0 ||
+       matcher.referenceNeighborOffset + matcher.referenceNeighborCount > matcher.coordinationNumber ||
+       matcher.cutoffMultiplier <= EPSILON){
+        return false;
     }
+
+    double localScale = 0.0;
+    const int referenceBegin = matcher.referenceNeighborOffset;
+    const int referenceEnd = referenceBegin + matcher.referenceNeighborCount;
+    for(int neighborSlot = referenceBegin; neighborSlot < referenceEnd; ++neighborSlot){
+        localScale += std::sqrt(query.results()[neighborSlot].distanceSq);
+    }
+    localScale /= static_cast<double>(matcher.referenceNeighborCount);
     if(localScale <= EPSILON){
         return false;
     }
 
-    if(static_cast<int>(query.results().size()) > matcher.coordinationNumber){
-        const double localGap =
-            std::sqrt(query.results()[matcher.coordinationNumber].distanceSq) -
-            std::sqrt(query.results()[matcher.coordinationNumber - 1].distanceSq);
-        if(localGap <= matcher.cutoffGap * localScale){
-            if(outRejectedByNeighborGap){
-                *outRejectedByNeighborGap = true;
-            }
-            if(!allowCollapsedNeighborShell){
-                return false;
-            }
+    const double localCutoff = matcher.cutoffMultiplier * localScale;
+    const double cutoffSquared = localCutoff * localCutoff;
+
+    if(matcher.extraNeighborRejectIndex >= 0 &&
+       static_cast<int>(query.results().size()) > matcher.extraNeighborRejectIndex &&
+       query.results()[matcher.extraNeighborRejectIndex].distanceSq <= cutoffSquared){
+        if(outRejectedByNeighborGap){
+            *outRejectedByNeighborGap = true;
+        }
+        if(!allowCollapsedNeighborShell){
+            return false;
         }
     }
 
     NeighborBondArray runtimeNeighborArray;
-    const double cutoffSquared = matcher.localCutoff * matcher.localCutoff * localScale * localScale;
     for(int ni1 = 0; ni1 < matcher.coordinationNumber; ++ni1){
         runtimeNeighborArray.setNeighborBond(ni1, ni1, false);
         for(int ni2 = ni1 + 1; ni2 < matcher.coordinationNumber; ++ni2){
@@ -118,7 +126,7 @@ bool matchGenericLocalMatcherImpl(
     outMatch.patternId = pattern.id;
     outMatch.structureType = pattern.structureType;
     outMatch.localMatcherIndex = localMatcherIndex;
-    outMatch.localCutoff = matcher.localCutoff * localScale;
+    outMatch.localCutoff = localCutoff;
     outMatch.coordinationNumber = matcher.coordinationNumber;
     outMatch.allowedSymmetryMask = AnalysisSymmetryUtils::fullSymmetryMask(static_cast<int>(matcher.symmetries.size()));
     outMatch.symmetryPermutation = -1;
