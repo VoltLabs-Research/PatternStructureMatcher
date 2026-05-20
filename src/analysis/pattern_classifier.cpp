@@ -710,7 +710,7 @@ void PatternClassifier::classify(StructureAnalysis& analysis){
     _atomDxaStates = std::make_shared<std::vector<PatternDxaAtomState>>(context.atomCount());
 
     NearestNeighborFinder neighborFinder(MAX_NEIGHBORS);
-    if(!neighborFinder.prepare(context.positions, context.simCell, context.particleSelection)){
+    if(!neighborFinder.prepare(context.positions, context.simCell)){
         throw std::runtime_error("Error preparing nearest-neighbor finder for pattern matching.");
     }
 
