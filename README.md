@@ -30,10 +30,10 @@ pattern-structure-matching <lammps_file> [output_base] [options]
 | --- | --- | --- | --- |
 | `<lammps_file>` | Yes | Input LAMMPS dump file. | |
 | `[output_base]` | No | Base path for output files. | derived from input |
-| `--lattice-dir <path>` | Yes | Directory containing PatternStructureMatching lattice YAMLs. | |
-| `--reference-lattice-dir <path>` | Yes | Directory containing OpenDXA reference lattice YAMLs. | |
+| `--lattice_dir <path>` | Yes | Directory containing PatternStructureMatching lattice YAMLs. | |
+| `--reference_lattice_dir <path>` | Yes | Directory containing OpenDXA reference lattice YAMLs. | |
 | `--patterns <csv>` | No | Optional lattice filter, for example `fcc,bcc`. | all lattices |
-| `--dissolveSmallClusters` | No | Mark small clusters as `OTHER` after clustering. | `false` |
+| `--dissolve_small_clusters` | No | Mark small clusters as `OTHER` after clustering. | `false` |
 | `--help` | No | Print CLI help. | |
 
 ## VOLT Plugin Workflow
@@ -87,7 +87,7 @@ matrix phase, execution fails with a validation error.
 When `PatternStructureMatching` is selected as the upstream algorithm inside the
 `OpenDXA` plugin:
 
-- `OpenDXA` passes its matrix phase through `reference-topology`
+- `OpenDXA` passes its matrix phase through `reference_topology`
 - that value is mapped into the PSM `Matrix Pattern Name Override`
 - the PSM wrapper writes matching OpenDXA YAMLs under `<output_base>_generated_lattices/opendxa`
 - the `OpenDXA` wrapper consumes that generated directory automatically
@@ -102,13 +102,13 @@ The UI is equivalent to defining data shaped like this:
 ```text
 Pattern 1:
   name = bi_a7
-  isMatrixPhase = true
-  coordinationNumber = 6
-  coordinateMode = fractional
-  cellA = (1, 0, 0)
-  cellB = (0.5, 0.866, 0)
-  cellC = (0, 0, 1.5)
-  basisAtoms = [
+  is_matrix_phase = true
+  coordination_number = 6
+  coordinate_mode = fractional
+  cell_a = (1, 0, 0)
+  cell_b = (0.5, 0.866, 0)
+  cell_c = (0, 0, 1.5)
+  basis_atoms = [
     { species, x, y, z },
     { species, x, y, z },
     ...

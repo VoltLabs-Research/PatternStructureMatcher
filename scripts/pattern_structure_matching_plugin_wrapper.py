@@ -317,15 +317,15 @@ def parse_cell_vector(
 
 
 def parse_pattern_definitions(raw_value: str) -> list[PatternDefinition]:
-    payload = parse_json_argument(raw_value, "patternDefinitions")
+    payload = parse_json_argument(raw_value, "pattern_definitions")
     if not isinstance(payload, list) or not payload:
-        raise WrapperError("patternDefinitions debe contener al menos un patron.")
+        raise WrapperError("pattern_definitions debe contener al menos un patron.")
 
     definitions: list[PatternDefinition] = []
     seen_names: set[str] = set()
 
     for index, raw_pattern in enumerate(payload):
-        pattern_label = f"patternDefinitions[{index}]"
+        pattern_label = f"pattern_definitions[{index}]"
         if not isinstance(raw_pattern, dict):
             raise WrapperError(f"{pattern_label} debe ser un objeto.")
 
@@ -336,40 +336,40 @@ def parse_pattern_definitions(raw_value: str) -> list[PatternDefinition]:
         seen_names.add(normalized_name)
 
         coordination_number = coerce_int(
-            raw_pattern.get("coordinationNumber"),
-            f"{pattern_label}.coordinationNumber",
+            raw_pattern.get("coordination_number"),
+            f"{pattern_label}.coordination_number",
         )
         if coordination_number <= 0:
-            raise WrapperError(f"{pattern_label}.coordinationNumber debe ser mayor que cero.")
+            raise WrapperError(f"{pattern_label}.coordination_number debe ser mayor que cero.")
 
-        coordinate_mode = normalize_token(str(raw_pattern.get("coordinateMode", "fractional")))
+        coordinate_mode = normalize_token(str(raw_pattern.get("coordinate_mode", "fractional")))
         if coordinate_mode not in {"fractional", "cartesian"}:
-            raise WrapperError(f"{pattern_label}.coordinateMode debe ser fractional o cartesian.")
+            raise WrapperError(f"{pattern_label}.coordinate_mode debe ser fractional o cartesian.")
 
         reference_basis_index = coerce_int(
-            raw_pattern.get("referenceBasisIndex", 0),
-            f"{pattern_label}.referenceBasisIndex",
+            raw_pattern.get("reference_basis_index", 0),
+            f"{pattern_label}.reference_basis_index",
         )
         if reference_basis_index < 0:
-            raise WrapperError(f"{pattern_label}.referenceBasisIndex no puede ser negativo.")
+            raise WrapperError(f"{pattern_label}.reference_basis_index no puede ser negativo.")
 
         spec = PatternSpec(
             name=name,
             coordination_number=coordination_number,
             scale=coerce_float(raw_pattern.get("scale", 1.0), f"{pattern_label}.scale"),
             cell=(
-                parse_cell_vector(raw_pattern, pattern_label, "cellA", "cellA", (1.0, 0.0, 0.0)),
-                parse_cell_vector(raw_pattern, pattern_label, "cellB", "cellB", (0.0, 1.0, 0.0)),
-                parse_cell_vector(raw_pattern, pattern_label, "cellC", "cellC", (0.0, 0.0, 1.0)),
+                parse_cell_vector(raw_pattern, pattern_label, "cell_a", "cell_a", (1.0, 0.0, 0.0)),
+                parse_cell_vector(raw_pattern, pattern_label, "cell_b", "cell_b", (0.0, 1.0, 0.0)),
+                parse_cell_vector(raw_pattern, pattern_label, "cell_c", "cell_c", (0.0, 0.0, 1.0)),
             ),
             coordinate_mode=coordinate_mode,
-            basis=parse_basis_atoms(raw_pattern.get("basisAtoms"), f"{pattern_label}.basisAtoms"),
+            basis=parse_basis_atoms(raw_pattern.get("basis_atoms"), f"{pattern_label}.basis_atoms"),
         )
 
         definitions.append(PatternDefinition(
             spec=spec,
             reference_basis_index=reference_basis_index,
-            is_matrix_phase=coerce_bool(raw_pattern.get("isMatrixPhase", False), f"{pattern_label}.isMatrixPhase"),
+            is_matrix_phase=coerce_bool(raw_pattern.get("is_matrix_phase", False), f"{pattern_label}.is_matrix_phase"),
         ))
 
     return definitions
@@ -390,7 +390,7 @@ def resolve_matrix_pattern_name(
         resolved = definitions_by_name.get(normalized_override)
         if not resolved:
             raise WrapperError(
-                "matrixPatternName debe coincidir con uno de los patrones definidos por el usuario."
+                "matrix_pattern_name debe coincidir con uno de los patrones definidos por el usuario."
             )
         return resolved
 
@@ -404,13 +404,13 @@ def resolve_matrix_pattern_name(
     if len(matrix_phase_patterns) > 1:
         raise WrapperError(
             "Solo un patron puede estar marcado como matrix phase. "
-            "Usa una sola marca o define matrixPatternName."
+            "Usa una sola marca o define matrix_pattern_name."
         )
     if len(pattern_definitions) == 1:
         return pattern_definitions[0].spec.name
 
     raise WrapperError(
-        "Define matrixPatternName o marca exactamente un patron como matrix phase."
+        "Define matrix_pattern_name o marca exactamente un patron como matrix phase."
     )
 
 
@@ -487,7 +487,7 @@ def vector_length_sq(vector: tuple[float, float, float]) -> float:
 def derive_neighbor_vectors(spec: PatternSpec, reference_basis_index: int) -> list[tuple[float, float, float]]:
     if reference_basis_index < 0 or reference_basis_index >= len(spec.basis):
         raise WrapperError(
-            f"referenceBasisIndex={reference_basis_index} esta fuera de rango para '{spec.name}'. "
+            f"reference_basis_index={reference_basis_index} esta fuera de rango para '{spec.name}'. "
             f"La basis tiene {len(spec.basis)} atomos."
         )
 
@@ -541,7 +541,7 @@ def materialize_lattice_directories(
     args: argparse.Namespace,
     output_base: str,
 ) -> tuple[Path, Path, dict[str, object], list[str], str]:
-    pattern_definitions = parse_pattern_definitions(args.patternDefinitions)
+    pattern_definitions = parse_pattern_definitions(args.pattern_definitions)
 
     generated_root = Path(f"{output_base}_generated_lattices")
     pattern_dir = generated_root / "pattern-structure-matching"
@@ -555,7 +555,7 @@ def materialize_lattice_directories(
 
     selected_patterns = [pattern_definition.spec.name for pattern_definition in pattern_definitions]
     reference_topology = resolve_matrix_pattern_name(
-        args.matrixPatternName or args.referenceTopology,
+        args.matrix_pattern_name or args.reference_topology,
         pattern_definitions,
     )
 
@@ -624,15 +624,15 @@ def build_psm_command(
         str(psm_binary),
         input_dump,
         output_base,
-        "--lattice-dir",
+        "--lattice_dir",
         str(pattern_dir),
-        "--reference-lattice-dir",
+        "--reference_lattice_dir",
         str(opendxa_dir),
         "--patterns",
         ",".join(selected_patterns),
     ]
-    if args.dissolveSmallClusters:
-        command.append("--dissolveSmallClusters")
+    if args.dissolve_small_clusters:
+        command.append("--dissolve_small_clusters")
     return command
 
 
@@ -643,11 +643,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("input_dump")
     parser.add_argument("output_base")
-    parser.add_argument("--patternDefinitions", default="")
-    parser.add_argument("--matrixPatternName", default="")
-    parser.add_argument("--referenceTopology", default="")
-    parser.add_argument("--dissolveSmallClusters", action="store_true")
-    parser.add_argument("--onlyGenerateYaml", action="store_true")
+    parser.add_argument("--pattern_definitions", default="")
+    parser.add_argument("--matrix_pattern_name", default="")
+    parser.add_argument("--reference_topology", default="")
+    parser.add_argument("--dissolve_small_clusters", action="store_true")
+    parser.add_argument("--only_generate_yaml", action="store_true")
 
     args, unknown = parser.parse_known_args(argv)
     if unknown:
@@ -683,11 +683,11 @@ def run_pipeline(args: argparse.Namespace) -> dict[str, object]:
         "patternLatticeDir": str(pattern_dir),
         "opendxaLatticeDir": str(opendxa_dir),
         "selectedPatterns": selected_patterns,
-        "referenceTopology": reference_topology,
+        "reference_topology": reference_topology,
         "manifestPath": manifest["manifest_path"],
     }
 
-    if args.onlyGenerateYaml:
+    if args.only_generate_yaml:
         result["generatedOnly"] = True
         return result
 

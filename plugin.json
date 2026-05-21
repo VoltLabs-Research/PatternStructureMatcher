@@ -32,7 +32,7 @@
           "arguments": {
             "arguments": [
               {
-                "argument": "patternDefinitions",
+                "argument": "pattern_definitions",
                 "type": "list",
                 "label": "Custom Patterns",
                 "required": true,
@@ -44,13 +44,13 @@
                     "default": ""
                   },
                   {
-                    "argument": "isMatrixPhase",
+                    "argument": "is_matrix_phase",
                     "type": "boolean",
                     "label": "Use As Matrix Phase",
                     "default": false
                   },
                   {
-                    "argument": "coordinationNumber",
+                    "argument": "coordination_number",
                     "type": "number",
                     "label": "Coordination Number",
                     "default": 12,
@@ -66,7 +66,7 @@
                     "step": 0.1
                   },
                   {
-                    "argument": "coordinateMode",
+                    "argument": "coordinate_mode",
                     "type": "select",
                     "label": "Coordinate Mode",
                     "default": "fractional",
@@ -82,7 +82,7 @@
                     ]
                   },
                   {
-                    "argument": "referenceBasisIndex",
+                    "argument": "reference_basis_index",
                     "type": "number",
                     "label": "Reference Basis Atom Index",
                     "default": 0,
@@ -90,7 +90,7 @@
                     "step": 1
                   },
                   {
-                    "argument": "cellA",
+                    "argument": "cell_a",
                     "type": "tuple",
                     "label": "Cell A",
                     "default": {
@@ -123,7 +123,7 @@
                     ]
                   },
                   {
-                    "argument": "cellB",
+                    "argument": "cell_b",
                     "type": "tuple",
                     "label": "Cell B",
                     "default": {
@@ -156,7 +156,7 @@
                     ]
                   },
                   {
-                    "argument": "cellC",
+                    "argument": "cell_c",
                     "type": "tuple",
                     "label": "Cell C",
                     "default": {
@@ -189,7 +189,7 @@
                     ]
                   },
                   {
-                    "argument": "basisAtoms",
+                    "argument": "basis_atoms",
                     "type": "list",
                     "label": "Basis Atoms",
                     "required": true,
@@ -228,13 +228,13 @@
                 ]
               },
               {
-                "argument": "matrixPatternName",
+                "argument": "matrix_pattern_name",
                 "type": "string",
                 "label": "Matrix Pattern Name Override",
                 "default": ""
               },
               {
-                "argument": "dissolveSmallClusters",
+                "argument": "dissolve_small_clusters",
                 "type": "boolean",
                 "label": "Dissolve Small Clusters",
                 "default": false

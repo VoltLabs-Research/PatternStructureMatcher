@@ -10,10 +10,10 @@ namespace Volt {
 void showUsage(const std::string& name){
     printUsageHeader(name, "Volt - Pattern Structure Matching");
     std::cerr
-        << "  --lattice-dir <path>         Directory containing PatternStructureMatching lattice YAMLs.\n"
-        << "  --reference-lattice-dir <path> Directory containing OpenDXA reference lattice YAMLs.\n"
+        << "  --lattice_dir <path>         Directory containing PatternStructureMatching lattice YAMLs.\n"
+        << "  --reference_lattice_dir <path> Directory containing OpenDXA reference lattice YAMLs.\n"
         << "  --patterns <csv>             Optional lattice filter (e.g. fcc,bcc). Default: all.\n"
-        << "  --dissolveSmallClusters      Mark small clusters as OTHER after building clusters.\n";
+        << "  --dissolve_small_clusters      Mark small clusters as OTHER after building clusters.\n";
     printHelpOption();
 }
 
@@ -38,14 +38,14 @@ int main(int argc, char* argv[]){
     outputBase = deriveOutputBase(filename, outputBase);
     spdlog::info("Output base: {}", outputBase);
 
-    const std::string latticeDirectory = getString(opts, "--lattice-dir", "");
+    const std::string latticeDirectory = getString(opts, "--lattice_dir", "");
     if(latticeDirectory.empty()){
-        spdlog::error("No lattice directory resolved. Use --lattice-dir <path>.");
+        spdlog::error("No lattice directory resolved. Use --lattice_dir <path>.");
         return 1;
     }
-    const std::string referenceLatticeDirectory = getString(opts, "--reference-lattice-dir", "");
+    const std::string referenceLatticeDirectory = getString(opts, "--reference_lattice_dir", "");
     if(referenceLatticeDirectory.empty()){
-        spdlog::error("No reference lattice directory resolved. Use --reference-lattice-dir <path>.");
+        spdlog::error("No reference lattice directory resolved. Use --reference_lattice_dir <path>.");
         return 1;
     }
 
@@ -55,7 +55,7 @@ int main(int argc, char* argv[]){
     analyzer.setLatticeDirectory(latticeDirectory);
     analyzer.setReferenceLatticeDirectory(referenceLatticeDirectory);
     analyzer.setSelectedPatterns(selectedPatterns);
-    analyzer.setDissolveSmallClusters(hasOption(opts, "--dissolveSmallClusters"));
+    analyzer.setDissolveSmallClusters(hasOption(opts, "--dissolve_small_clusters"));
 
     spdlog::info("Using lattice directory: {}", latticeDirectory);
     if(!referenceLatticeDirectory.empty()){

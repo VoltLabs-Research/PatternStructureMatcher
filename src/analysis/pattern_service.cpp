@@ -469,11 +469,11 @@ json PatternStructureMatchingService::compute(
     const std::string& inputDumpPath
 ){
     if(_latticeDirectory.empty()){
-        return AnalysisResult::failure("Lattice directory is required. Use --lattice-dir <path>.");
+        return AnalysisResult::failure("Lattice directory is required. Use --lattice_dir <path>.");
     }
     if(_referenceLatticeDirectory.empty()){
         return AnalysisResult::failure(
-            "Reference lattice directory is required. Use --reference-lattice-dir <path>."
+            "Reference lattice directory is required. Use --reference_lattice_dir <path>."
         );
     }
 
