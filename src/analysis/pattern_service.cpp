@@ -12,6 +12,7 @@
 #include <volt/analysis/reconstructed_analysis_pipeline.h>
 #include <volt/core/analysis_result.h>
 #include <volt/utilities/json_utils.h>
+#include <volt/utilities/msgpack_atom_writer.h>
 #include <volt/structures/crystal_topology_registry.h>
 
 #include <algorithm>
@@ -92,130 +93,6 @@ bool resolveSelectedPatternIds(
     return true;
 }
 
-int structureTypeForPattern(const CompiledPattern& pattern){
-    return pattern.structureType;
-}
-
-json buildMainListing(
-    const AnalysisContext& context,
-    const PatternCatalog& catalog,
-    const std::vector<int>& atomPatternIds
-){
-    struct ListingEntry {
-        std::string name;
-        int label = static_cast<int>(StructureType::OTHER);
-        int count = 0;
-    };
-
-    std::map<int, ListingEntry> counts;
-    for(std::size_t atomIndex = 0; atomIndex < context.atomCount(); ++atomIndex){
-        const int patternId = atomIndex < atomPatternIds.size() ? atomPatternIds[atomIndex] : -1;
-        if(patternId >= 0){
-            const auto& pattern = catalog.patternById(patternId);
-            const int structureLabel = context.structureTypes->getInt(atomIndex);
-            auto& entry = counts[structureLabel];
-            entry.label = structureLabel;
-            entry.name = pattern.name;
-            ++entry.count;
-            continue;
-        }
-
-        auto& entry = counts[static_cast<int>(StructureType::OTHER)];
-        entry.label = static_cast<int>(StructureType::OTHER);
-        entry.name = "OTHER";
-        ++entry.count;
-    }
-
-    json listing = json::array();
-    for(const auto& [_, entry] : counts){
-        listing.push_back({
-            {"structure_type", entry.label},
-            {"structure_name", entry.name},
-            {"count", entry.count},
-        });
-    }
-
-    std::sort(listing.begin(), listing.end(), [](const json& lhs, const json& rhs){
-        return lhs.value("structure_name", "") < rhs.value("structure_name", "");
-    });
-    return listing;
-}
-
-json buildPatternListing(const PatternCatalog& catalog, const std::vector<int>& atomPatternIds){
-    std::vector<int> counts(catalog.patterns().size(), 0);
-    for(int patternId : atomPatternIds){
-        if(patternId < 0 || patternId >= static_cast<int>(counts.size())){
-            continue;
-        }
-        counts[static_cast<std::size_t>(patternId)]++;
-    }
-
-    json listing = json::array();
-    for(const CompiledPattern& pattern : catalog.patterns()){
-        const int count = counts[static_cast<std::size_t>(pattern.id)];
-        if(count == 0){
-            continue;
-        }
-        listing.push_back({
-            {"pattern_id", pattern.id},
-            {"pattern_name", pattern.name},
-            {"count", count},
-        });
-    }
-
-    std::sort(listing.begin(), listing.end(), [](const json& lhs, const json& rhs){
-        return lhs.value("pattern_name", "") < rhs.value("pattern_name", "");
-    });
-    return listing;
-}
-
-json buildPerAtomProperties(
-    const LammpsParser::Frame& frame,
-    const AnalysisContext& context,
-    const PatternCatalog& catalog,
-    const std::vector<int>& atomPatternIds
-){
-    json perAtom = json::array();
-    for(std::size_t atomIndex = 0; atomIndex < context.atomCount(); ++atomIndex){
-        const int structureType = context.structureTypes->getInt(atomIndex);
-        const int patternId = atomPatternIds[atomIndex];
-        const CompiledPattern* pattern = nullptr;
-        if(patternId >= 0 && patternId < static_cast<int>(catalog.patterns().size())){
-            pattern = &catalog.patternById(patternId);
-        }
-
-        json atom;
-        atom["id"] = atomIndex < frame.ids.size() ? frame.ids[atomIndex] : static_cast<int>(atomIndex);
-        atom["structure_type"] = structureType;
-        atom["structure_name"] = pattern ? pattern->name : structureTypeNameForExport(structureType);
-        atom["pattern_id"] = patternId;
-        atom["pattern_name"] = pattern ? pattern->name : "";
-        atom["cluster_id"] = context.atomClusters ? context.atomClusters->getInt(atomIndex) : 0;
-
-        if(atomIndex < frame.positions.size()){
-            const auto& position = frame.positions[atomIndex];
-            atom["pos"] = {position.x(), position.y(), position.z()};
-        }else{
-            atom["pos"] = {0.0, 0.0, 0.0};
-        }
-
-        perAtom.push_back(std::move(atom));
-    }
-    return perAtom;
-}
-
-json buildSelectedPatterns(const PatternCatalog& catalog, const std::vector<int>& selectedPatternIds){
-    json selected = json::array();
-    for(int patternId : selectedPatternIds){
-        const CompiledPattern& pattern = catalog.patternById(patternId);
-        selected.push_back({
-            {"pattern_id", pattern.id},
-            {"structure_type", structureTypeForPattern(pattern)},
-            {"pattern_name", pattern.name},
-        });
-    }
-    return selected;
-}
 
 void applyPatternNeighborVectorOverrides(
     StructureAnalysis& analysis,
@@ -538,35 +415,70 @@ json PatternStructureMatchingService::compute(
         recomputeClusterOrientations(analysis, context);
         ReconstructedStateCanonicalizer::canonicalizeNeighborShellsToExportConvention(analysis, context);
 
-        json result = AnalysisResult::success();
-        result["lattice_directory"] = catalog->latticeDirectory().string();
-        result["reference_lattice_directory"] = _referenceLatticeDirectory;
-        result["selected_patterns"] = buildSelectedPatterns(*catalog, selectedPatternIds);
-        result["cluster_mode"] = "cluster-builder";
-        result["main_listing"] = buildMainListing(context, *catalog, atomPatternIds);
-        result["pattern_listing"] = buildPatternListing(*catalog, atomPatternIds);
-        result["per-atom-properties"] = buildPerAtomProperties(frame, context, *catalog, atomPatternIds);
-        if(!AnalysisPipelineUtils::appendClusterOutputs(
-            frame,
-            outputBase,
-            annotatedDumpPath,
-            context,
-            analysis,
-            result,
-            &frameError
-        )){
-            return AnalysisResult::failure(frameError);
+        // Build selected patterns summary (small — keep DOM)
+        json selectedPatternsJson = json::array();
+        for(int patternId : selectedPatternIds){
+            const CompiledPattern& pattern = catalog->patternById(patternId);
+            selectedPatternsJson.push_back({
+                {"pattern_id", pattern.id},
+                {"structure_type", pattern.structureType},
+                {"pattern_name", pattern.name},
+            });
         }
 
-        if(!outputBase.empty()){
-            const std::string summaryPath = outputBase + "_pattern_analysis.msgpack";
-            if(!JsonUtils::writeJsonMsgpackToFile(result, summaryPath, false)){
-                return AnalysisResult::failure("Failed to write " + summaryPath);
+        // Build pattern listing counts (small — keep DOM)
+        {
+            std::vector<int> patCounts(catalog->patterns().size(), 0);
+            for(int pid : atomPatternIds){
+                if(pid >= 0 && pid < static_cast<int>(patCounts.size())) patCounts[pid]++;
             }
-            result["pattern_analysis"] = summaryPath;
-        }
+            json patListing = json::array();
+            for(const CompiledPattern& pattern : catalog->patterns()){
+                const int cnt = patCounts[pattern.id];
+                if(cnt == 0) continue;
+                patListing.push_back({{"pattern_id", pattern.id}, {"pattern_name", pattern.name}, {"count", cnt}});
+            }
+            std::sort(patListing.begin(), patListing.end(), [](const json& a, const json& b){
+                return a.value("pattern_name","") < b.value("pattern_name","");
+            });
 
-        return result;
+            // main_listing: structure counts (small)
+            std::map<std::string, int> structCounts;
+            for(std::size_t i = 0; i < context.atomCount(); ++i){
+                const int pid = i < atomPatternIds.size() ? atomPatternIds[i] : -1;
+                const std::string name = (pid >= 0 && pid < static_cast<int>(catalog->patterns().size()))
+                    ? catalog->patternById(pid).name : "OTHER";
+                structCounts[name]++;
+            }
+            json mainListing = json::array();
+            for(const auto& [name, cnt] : structCounts){
+                mainListing.push_back({{"structure_name", name}, {"count", cnt}});
+            }
+
+            json result = AnalysisResult::success();
+            result["lattice_directory"] = catalog->latticeDirectory().string();
+            result["reference_lattice_directory"] = _referenceLatticeDirectory;
+            result["selected_patterns"] = std::move(selectedPatternsJson);
+            result["cluster_mode"] = "cluster-builder";
+            result["main_listing"] = std::move(mainListing);
+            result["pattern_listing"] = std::move(patListing);
+
+            if(!AnalysisPipelineUtils::appendClusterOutputs(
+                frame, outputBase, annotatedDumpPath, context, analysis, result, &frameError
+            )){
+                return AnalysisResult::failure(frameError);
+            }
+
+            if(!outputBase.empty()){
+                const std::string summaryPath = outputBase + "_pattern_analysis.msgpack";
+                if(!JsonUtils::writeJsonMsgpackToFile(result, summaryPath, false)){
+                    return AnalysisResult::failure("Failed to write " + summaryPath);
+                }
+                result["pattern_analysis"] = summaryPath;
+            }
+
+            return result;
+        }
     }catch(const std::exception& error){
         return AnalysisResult::failure(std::string("Pattern matching analysis failed: ") + error.what());
     }
