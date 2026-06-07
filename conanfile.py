@@ -4,7 +4,7 @@ from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
 
 class PatternStructureMatchingConan(ConanFile):
     name = "pattern-structure-matching"
-    version = "1.0.0"
+    version = "1.0.1"
     package_type = "static-library"
     license = "MIT"
     settings = "os", "arch", "compiler", "build_type"
