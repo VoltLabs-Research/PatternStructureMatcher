@@ -475,6 +475,13 @@ json PatternStructureMatchingService::compute(
                     return AnalysisResult::failure("Failed to write " + summaryPath);
                 }
                 result["pattern_analysis"] = summaryPath;
+
+                const std::string atomsPath = outputBase + "_atoms.msgpack";
+                streamAtomsToFile(atomsPath, frame, [&](std::size_t i){
+                    const int pid = i < atomPatternIds.size() ? atomPatternIds[i] : -1;
+                    return (pid >= 0 && pid < static_cast<int>(catalog->patterns().size()))
+                        ? catalog->patternById(pid).name : std::string("OTHER");
+                });
             }
 
             return result;

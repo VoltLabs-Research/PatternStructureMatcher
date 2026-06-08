@@ -15,7 +15,7 @@
             "icon": "HiCubeTransparent",
             "author": "OpenAI Codex",
             "license": "MIT",
-            "version": "1.0.2",
+            "version": "1.0.3",
             "homepage": "https://github.com/VoltLabs-Research/Volt",
             "description": "Ejecuta PatternStructureMatching a partir de patrones definidos por el usuario y exporta el reconstructed-state contract consumible por OpenDXA."
           }
@@ -323,6 +323,36 @@
             "hasListing": false
           }
         }
+      },
+      {
+        "id": "structure-identification-exposure",
+        "type": "exposure",
+        "position": {
+          "x": 1712,
+          "y": 336
+        },
+        "data": {
+          "exposure": {
+            "name": "Structure Identification",
+            "icon": "HiCubeTransparent",
+            "results": "atoms.msgpack",
+            "iterable": ""
+          }
+        }
+      },
+      {
+        "id": "structure-identification-export",
+        "type": "export",
+        "position": {
+          "x": 2032,
+          "y": 336
+        },
+        "data": {
+          "export": {
+            "exporter": "AtomisticExporter",
+            "type": "glb"
+          }
+        }
       }
     ],
     "edges": [
@@ -359,6 +389,20 @@
         "source": "analysis-entrypoint",
         "sourceHandle": "output",
         "target": "pattern-analysis-exposure",
+        "targetHandle": "input"
+      },
+      {
+        "id": "edge-entrypoint-structure-identification",
+        "source": "analysis-entrypoint",
+        "sourceHandle": "output",
+        "target": "structure-identification-exposure",
+        "targetHandle": "input"
+      },
+      {
+        "id": "edge-structure-identification-export",
+        "source": "structure-identification-exposure",
+        "sourceHandle": "output",
+        "target": "structure-identification-export",
         "targetHandle": "input"
       }
     ]
