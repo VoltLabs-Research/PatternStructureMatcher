@@ -12,7 +12,7 @@
 #include <volt/analysis/reconstructed_analysis_pipeline.h>
 #include <volt/core/analysis_result.h>
 #include <volt/utilities/json_utils.h>
-#include <volt/utilities/msgpack_atom_writer.h>
+#include <volt/utilities/parquet_atom_writer.h>
 #include <volt/structures/crystal_topology_registry.h>
 
 #include <algorithm>
@@ -470,14 +470,14 @@ json PatternStructureMatchingService::compute(
             }
 
             if(!outputBase.empty()){
-                const std::string summaryPath = outputBase + "_pattern_analysis.msgpack";
-                if(!JsonUtils::writeJsonMsgpackToFile(result, summaryPath, false)){
+                const std::string summaryPath = outputBase + "_pattern_analysis.parquet";
+                if(!JsonUtils::writeJsonToParquet(result, summaryPath, false)){
                     return AnalysisResult::failure("Failed to write " + summaryPath);
                 }
                 result["pattern_analysis"] = summaryPath;
 
-                const std::string atomsPath = outputBase + "_atoms.msgpack";
-                streamAtomsToFile(atomsPath, frame, [&](std::size_t i){
+                const std::string atomsPath = outputBase + "_atoms.parquet";
+                streamAtomsToParquet(atomsPath, frame, [&](std::size_t i){
                     const int pid = i < atomPatternIds.size() ? atomPatternIds[i] : -1;
                     return (pid >= 0 && pid < static_cast<int>(catalog->patterns().size()))
                         ? catalog->patternById(pid).name : std::string("OTHER");

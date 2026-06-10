@@ -607,7 +607,7 @@ def ensure_outputs(output_base: str) -> dict[str, str]:
         "annotatedDump": str(require_file(Path(f"{output_base}_annotated.dump"))),
         "clustersTable": str(require_file(Path(f"{output_base}_clusters.table"))),
         "clustersTransitions": str(require_file(Path(f"{output_base}_cluster_transitions.table"))),
-        "patternAnalysis": str(require_file(Path(f"{output_base}_pattern_analysis.msgpack"))),
+        "patternAnalysis": str(require_file(Path(f"{output_base}_pattern_analysis.parquet"))),
     }
 
 

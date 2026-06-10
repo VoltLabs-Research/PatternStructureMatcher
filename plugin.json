@@ -318,7 +318,7 @@
           "exposure": {
             "name": "Pattern Analysis",
             "icon": "HiCube",
-            "results": "pattern_analysis.msgpack",
+            "results": "pattern_analysis.parquet",
             "iterable": "",
             "hasListing": false
           }
@@ -335,7 +335,7 @@
           "exposure": {
             "name": "Structure Identification",
             "icon": "HiCubeTransparent",
-            "results": "atoms.msgpack",
+            "results": "atoms.parquet",
             "iterable": ""
           }
         }
