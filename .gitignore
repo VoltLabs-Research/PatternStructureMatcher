@@ -2,6 +2,7 @@
 build/
 build-local/
 cmake-build-*/
+CLAUDE.md
 
 # CMake / Ninja artifacts
 CMakeFiles/
