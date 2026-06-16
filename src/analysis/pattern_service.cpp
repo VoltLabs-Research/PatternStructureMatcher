@@ -481,7 +481,11 @@ json PatternStructureMatchingService::compute(
                     const int pid = i < atomPatternIds.size() ? atomPatternIds[i] : -1;
                     return (pid >= 0 && pid < static_cast<int>(catalog->patterns().size()))
                         ? catalog->patternById(pid).name : std::string("OTHER");
-                });
+                },
+                // PSM is a structural-identification stage (feeds OpenDXA): opt in to
+                // structure_id/structure_name.
+                /*writePerAtomColumns=*/{}, /*resolveStructureId=*/{},
+                /*includeStructureColumns=*/true);
             }
 
             return result;
