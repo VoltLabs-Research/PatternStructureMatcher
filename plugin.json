@@ -22,228 +22,6 @@
         }
       },
       {
-        "id": "plugin-arguments",
-        "type": "arguments",
-        "position": {
-          "x": 528,
-          "y": 208
-        },
-        "data": {
-          "arguments": {
-            "arguments": [
-              {
-                "argument": "pattern_definitions",
-                "type": "list",
-                "label": "Custom Patterns",
-                "required": true,
-                "listArguments": [
-                  {
-                    "argument": "name",
-                    "type": "string",
-                    "label": "Pattern Name",
-                    "default": ""
-                  },
-                  {
-                    "argument": "is_matrix_phase",
-                    "type": "boolean",
-                    "label": "Use As Matrix Phase",
-                    "default": false
-                  },
-                  {
-                    "argument": "coordination_number",
-                    "type": "number",
-                    "label": "Coordination Number",
-                    "default": 12,
-                    "min": 1,
-                    "step": 1
-                  },
-                  {
-                    "argument": "scale",
-                    "type": "number",
-                    "label": "Scale",
-                    "default": 1.0,
-                    "min": 0.000001,
-                    "step": 0.1
-                  },
-                  {
-                    "argument": "coordinate_mode",
-                    "type": "select",
-                    "label": "Coordinate Mode",
-                    "default": "fractional",
-                    "options": [
-                      {
-                        "key": "fractional",
-                        "label": "Fractional"
-                      },
-                      {
-                        "key": "cartesian",
-                        "label": "Cartesian"
-                      }
-                    ]
-                  },
-                  {
-                    "argument": "reference_basis_index",
-                    "type": "number",
-                    "label": "Reference Basis Atom Index",
-                    "default": 0,
-                    "min": 0,
-                    "step": 1
-                  },
-                  {
-                    "argument": "cell_a",
-                    "type": "tuple",
-                    "label": "Cell A",
-                    "default": {
-                      "x": 1.0,
-                      "y": 0.0,
-                      "z": 0.0
-                    },
-                    "listArguments": [
-                      {
-                        "argument": "x",
-                        "type": "number",
-                        "label": "X",
-                        "default": 1.0,
-                        "step": 0.1
-                      },
-                      {
-                        "argument": "y",
-                        "type": "number",
-                        "label": "Y",
-                        "default": 0.0,
-                        "step": 0.1
-                      },
-                      {
-                        "argument": "z",
-                        "type": "number",
-                        "label": "Z",
-                        "default": 0.0,
-                        "step": 0.1
-                      }
-                    ]
-                  },
-                  {
-                    "argument": "cell_b",
-                    "type": "tuple",
-                    "label": "Cell B",
-                    "default": {
-                      "x": 0.0,
-                      "y": 1.0,
-                      "z": 0.0
-                    },
-                    "listArguments": [
-                      {
-                        "argument": "x",
-                        "type": "number",
-                        "label": "X",
-                        "default": 0.0,
-                        "step": 0.1
-                      },
-                      {
-                        "argument": "y",
-                        "type": "number",
-                        "label": "Y",
-                        "default": 1.0,
-                        "step": 0.1
-                      },
-                      {
-                        "argument": "z",
-                        "type": "number",
-                        "label": "Z",
-                        "default": 0.0,
-                        "step": 0.1
-                      }
-                    ]
-                  },
-                  {
-                    "argument": "cell_c",
-                    "type": "tuple",
-                    "label": "Cell C",
-                    "default": {
-                      "x": 0.0,
-                      "y": 0.0,
-                      "z": 1.0
-                    },
-                    "listArguments": [
-                      {
-                        "argument": "x",
-                        "type": "number",
-                        "label": "X",
-                        "default": 0.0,
-                        "step": 0.1
-                      },
-                      {
-                        "argument": "y",
-                        "type": "number",
-                        "label": "Y",
-                        "default": 0.0,
-                        "step": 0.1
-                      },
-                      {
-                        "argument": "z",
-                        "type": "number",
-                        "label": "Z",
-                        "default": 1.0,
-                        "step": 0.1
-                      }
-                    ]
-                  },
-                  {
-                    "argument": "basis_atoms",
-                    "type": "list",
-                    "label": "Basis Atoms",
-                    "required": true,
-                    "listArguments": [
-                      {
-                        "argument": "species",
-                        "type": "number",
-                        "label": "Species",
-                        "default": 1,
-                        "min": 1,
-                        "step": 1
-                      },
-                      {
-                        "argument": "x",
-                        "type": "number",
-                        "label": "X",
-                        "default": 0.0,
-                        "step": 0.1
-                      },
-                      {
-                        "argument": "y",
-                        "type": "number",
-                        "label": "Y",
-                        "default": 0.0,
-                        "step": 0.1
-                      },
-                      {
-                        "argument": "z",
-                        "type": "number",
-                        "label": "Z",
-                        "default": 0.0,
-                        "step": 0.1
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "argument": "matrix_pattern_name",
-                "type": "string",
-                "label": "Matrix Pattern Name Override",
-                "default": ""
-              },
-              {
-                "argument": "dissolve_small_clusters",
-                "type": "boolean",
-                "label": "Dissolve Small Clusters",
-                "default": false
-              }
-            ]
-          }
-        }
-      },
-      {
         "id": "trajectory-context",
         "type": "context",
         "position": {
@@ -282,28 +60,8 @@
             "binary": "pattern-structure-matching",
             "binaryObjectPath": "__UPLOAD_BINARY_OBJECT_PATH__",
             "binaryFileName": "pattern-structure-matching",
-            "arguments": "{{ foreach-trajectory-dumps.currentValue.path }} {{ foreach-trajectory-dumps.outputPath }} {{ plugin-arguments.as_str }}",
-            "timeout": -1,
-            "outputs": [
-              {
-                "name": "annotatedDump",
-                "sourceSuffix": "_annotated.dump",
-                "contentType": "text/plain",
-                "description": "Per-atom reconstructed LAMMPS dump emitted by PatternStructureMatching."
-              },
-              {
-                "name": "clustersTable",
-                "sourceSuffix": "_clusters.table",
-                "contentType": "text/plain",
-                "description": "Cluster graph table required by OpenDXA."
-              },
-              {
-                "name": "clustersTransitions",
-                "sourceSuffix": "_cluster_transitions.table",
-                "contentType": "text/plain",
-                "description": "Cluster transitions table required by OpenDXA."
-              }
-            ]
+            "arguments": "{{ foreach-trajectory-dumps.currentValue.path }} {{ foreach-trajectory-dumps.outputPath }}",
+            "timeout": -1
           }
         }
       },
@@ -365,7 +123,6 @@
           "exposure": {
             "name": "Neighbor Lattice",
             "icon": "HiTable",
-            "id": "neighbor_lattice",
             "results": "neighbor_lattice.parquet",
             "hasListing": false
           }
@@ -373,20 +130,6 @@
       }
     ],
     "edges": [
-      {
-        "id": "edge-metadata-arguments",
-        "source": "plugin-metadata",
-        "sourceHandle": "output",
-        "target": "plugin-arguments",
-        "targetHandle": "input"
-      },
-      {
-        "id": "edge-arguments-context",
-        "source": "plugin-arguments",
-        "sourceHandle": "output",
-        "target": "trajectory-context",
-        "targetHandle": "input"
-      },
       {
         "id": "edge-context-foreach",
         "source": "trajectory-context",
@@ -428,7 +171,28 @@
         "sourceHandle": "output",
         "target": "neighbor-lattice-exposure",
         "targetHandle": "input"
+      },
+      {
+        "id": "edge-plugin-metadata-trajectory-context",
+        "source": "plugin-metadata",
+        "sourceHandle": "output",
+        "target": "trajectory-context",
+        "targetHandle": "input"
       }
     ]
+  },
+  "interface": {
+    "version": 2,
+    "provides": {
+      "volt/structure-identification@1": {
+        "annotated_dump": "annotated.dump",
+        "clusters_table": "clusters.table",
+        "cluster_transitions": "cluster_transitions.table",
+        "neighbor_lattice": "neighbor_lattice.parquet"
+      },
+      "volt/per-atom-properties@1": {
+        "atoms": "atoms.parquet"
+      }
+    }
   }
 }
