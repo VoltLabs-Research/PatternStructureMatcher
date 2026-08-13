@@ -15,7 +15,7 @@
             "icon": "HiCubeTransparent",
             "author": "OpenAI Codex",
             "license": "MIT",
-            "version": "2.0.4",
+            "version": "2.0.5",
             "homepage": "https://github.com/VoltLabs-Research/Volt",
             "description": "Ejecuta PatternStructureMatching a partir de patrones definidos por el usuario y exporta el reconstructed-state contract consumible por OpenDXA."
           }
@@ -133,7 +133,71 @@
         "data": {
           "export": {
             "exporter": "AtomisticExporter",
-            "type": "glb"
+            "type": "glb",
+            "options": {
+              "propertyColors": {
+                "OTHER": [
+                  0.949,
+                  0.949,
+                  0.949,
+                  1
+                ],
+                "FCC": [
+                  0.4,
+                  1,
+                  0.4,
+                  1
+                ],
+                "HCP": [
+                  1,
+                  0.4,
+                  0.4,
+                  1
+                ],
+                "BCC": [
+                  0.4,
+                  0.4,
+                  1,
+                  1
+                ],
+                "ICO": [
+                  1,
+                  0.6471,
+                  0,
+                  1
+                ],
+                "SC": [
+                  0.6275,
+                  0.0784,
+                  0.9961,
+                  1
+                ],
+                "CUBIC_DIAMOND": [
+                  0.0745,
+                  0.6275,
+                  0.9961,
+                  1
+                ],
+                "HEX_DIAMOND": [
+                  0.9961,
+                  0.5373,
+                  0,
+                  1
+                ],
+                "GRAPHENE": [
+                  0.1961,
+                  0.8039,
+                  0.1961,
+                  1
+                ],
+                "L12": [
+                  0.61,
+                  0.35,
+                  0.71,
+                  1
+                ]
+              }
+            }
           }
         }
       },
