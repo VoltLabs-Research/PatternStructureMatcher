@@ -415,7 +415,6 @@ json PatternStructureMatchingService::compute(
         recomputeClusterOrientations(analysis, context);
         ReconstructedStateCanonicalizer::canonicalizeNeighborShellsToExportConvention(analysis, context);
 
-        // Build selected patterns summary (small — keep DOM)
         json selectedPatternsJson = json::array();
         for(int patternId : selectedPatternIds){
             const CompiledPattern& pattern = catalog->patternById(patternId);
@@ -426,7 +425,6 @@ json PatternStructureMatchingService::compute(
             });
         }
 
-        // Build pattern listing counts (small — keep DOM)
         {
             std::vector<int> patCounts(catalog->patterns().size(), 0);
             for(int pid : atomPatternIds){
@@ -442,7 +440,6 @@ json PatternStructureMatchingService::compute(
                 return a.value("pattern_name","") < b.value("pattern_name","");
             });
 
-            // main_listing: structure counts (small)
             std::map<std::string, int> structCounts;
             for(std::size_t i = 0; i < context.atomCount(); ++i){
                 const int pid = i < atomPatternIds.size() ? atomPatternIds[i] : -1;
@@ -482,8 +479,6 @@ json PatternStructureMatchingService::compute(
                     return (pid >= 0 && pid < static_cast<int>(catalog->patterns().size()))
                         ? catalog->patternById(pid).name : std::string("OTHER");
                 },
-                // PSM is a structural-identification stage (feeds OpenDXA): opt in to
-                // structure_id/structure_name.
                 /*writePerAtomColumns=*/{}, /*resolveStructureId=*/{},
                 /*includeStructureColumns=*/true);
             }
