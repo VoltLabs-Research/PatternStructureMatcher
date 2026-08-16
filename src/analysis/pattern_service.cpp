@@ -443,12 +443,15 @@ json PatternStructureMatchingService::compute(
                 result["pattern_analysis"] = summaryPath;
 
                 const std::string atomsPath = outputBase + "_atoms.parquet";
-                streamAtomsToParquet(atomsPath, frame, [&](std::size_t i){
+                const auto patternIdAt = [&](std::size_t i){
                     const int pid = i < atomPatternIds.size() ? atomPatternIds[i] : -1;
-                    return (pid >= 0 && pid < static_cast<int>(catalog->patterns().size()))
-                        ? catalog->patternById(pid).name : std::string("OTHER");
+                    return (pid >= 0 && pid < static_cast<int>(catalog->patterns().size())) ? pid : -1;
+                };
+                streamAtomsToParquet(atomsPath, frame, [&](std::size_t i){
+                    const int pid = patternIdAt(i);
+                    return pid >= 0 ? catalog->patternById(pid).name : std::string("OTHER");
                 },
-                /*writePerAtomColumns=*/{}, /*resolveStructureId=*/{},
+                /*writePerAtomColumns=*/{}, patternIdAt,
                 /*includeStructureColumns=*/true);
             }
 
