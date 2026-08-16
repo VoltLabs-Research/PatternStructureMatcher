@@ -1,10 +1,12 @@
+import json
+import os
+
 from conan import ConanFile
 from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
 
 
 class PatternStructureMatchingConan(ConanFile):
     name = "pattern-structure-matching"
-    version = "2.0.5"
     package_type = "static-library"
     license = "MIT"
     settings = "os", "arch", "compiler", "build_type"
@@ -19,7 +21,13 @@ class PatternStructureMatchingConan(ConanFile):
         "nlohmann_json/3.11.3",
         "yaml-cpp/0.8.0",
     )
+    exports = "vpm.json"
     exports_sources = "CMakeLists.txt", "include/*", "src/*", "lattices/*", "lattices/**/*"
+
+    def set_version(self):
+        manifest = os.path.join(self.recipe_folder, "vpm.json")
+        with open(manifest, encoding="utf-8") as stream:
+            self.version = json.load(stream)["version"]
 
     def layout(self):
         cmake_layout(self)

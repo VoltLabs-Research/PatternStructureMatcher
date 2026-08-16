@@ -15,7 +15,7 @@
             "icon": "HiCubeTransparent",
             "author": "OpenAI Codex",
             "license": "MIT",
-            "version": "2.0.5",
+            "version": "2.0.6",
             "homepage": "https://github.com/VoltLabs-Research/Volt",
             "description": "Ejecuta PatternStructureMatching a partir de patrones definidos por el usuario y exporta el reconstructed-state contract consumible por OpenDXA."
           }
