@@ -7,8 +7,6 @@
 
 namespace Volt {
 
-namespace{
-
 constexpr double kPatternShellDistanceTolerance = 1e-6;
 
 struct PatternNeighborCandidate {
@@ -421,8 +419,6 @@ void compileGenericLocalMatchers(
         pattern.localMatchers.end(),
         [](const auto& matcher){ return matcher.requiresSpecies; }
     );
-}
-
 }
 
 CompiledPattern compilePattern(

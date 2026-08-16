@@ -17,8 +17,6 @@
 
 namespace Volt {
 
-namespace{
-
 bool orthonormalizeMatrix(const Matrix3& input, Matrix3& output){
     Vector3 c0 = input.column(0);
     Vector3 c1 = input.column(1);
@@ -334,8 +332,6 @@ bool assignBestOrientationFallbackPermutation(
     outCanonicalToRuntime = std::move(bestCanonicalToRuntime);
     outOrientation = bestOrientation;
     return true;
-}
-
 }
 
 bool matchGenericLocalMatcherImpl(

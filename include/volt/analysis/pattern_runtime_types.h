@@ -148,12 +148,4 @@ inline int syntheticStructureTypeForPattern(int patternId){
     return 1000 + patternId;
 }
 
-inline bool isSyntheticPatternStructureType(int structureType){
-    return structureType >= 1000;
-}
-
-inline int patternIdFromSyntheticStructureType(int structureType){
-    return isSyntheticPatternStructureType(structureType) ? (structureType - 1000) : -1;
-}
-
 }

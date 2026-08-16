@@ -94,37 +94,6 @@ bool resolveSelectedPatternIds(
 }
 
 
-void applyPatternNeighborVectorOverrides(
-    StructureAnalysis& analysis,
-    const AnalysisContext& context,
-    const std::shared_ptr<const std::vector<PatternDxaAtomState>>& atomStates
-){
-    if(!atomStates || atomStates->size() != context.atomCount()){
-        return;
-    }
-
-    std::vector<Vector3> neighborVectorOverrides(
-        context.atomCount() * static_cast<std::size_t>(MAX_NEIGHBORS),
-        Vector3::Zero()
-    );
-
-    for(std::size_t atomIndex = 0; atomIndex < context.atomCount(); ++atomIndex){
-        const PatternDxaAtomState& state = (*atomStates)[atomIndex];
-        const int count = std::min(state.coordinationNumber, static_cast<int>(MAX_NEIGHBORS));
-        for(int neighborSlot = 0; neighborSlot < count; ++neighborSlot){
-            neighborVectorOverrides[
-                atomIndex * static_cast<std::size_t>(MAX_NEIGHBORS) +
-                static_cast<std::size_t>(neighborSlot)
-            ] = state.idealNeighborVectors[static_cast<std::size_t>(neighborSlot)];
-        }
-    }
-
-    analysis.setNeighborLatticeVectorOverrides(
-        std::move(neighborVectorOverrides),
-        static_cast<std::size_t>(MAX_NEIGHBORS)
-    );
-}
-
 std::shared_ptr<std::vector<OrientationClusterAtomState>> buildOrientationClusterStates(
     const std::shared_ptr<const std::vector<PatternDxaAtomState>>& atomStates
 ){
