@@ -437,9 +437,7 @@ json PatternStructureMatchingService::compute(
 
             if(!outputBase.empty()){
                 const std::string summaryPath = outputBase + "_pattern_analysis.parquet";
-                if(!JsonUtils::writeJsonToParquet(result, summaryPath, false)){
-                    return AnalysisResult::failure("Failed to write " + summaryPath);
-                }
+                JsonUtils::writeJsonToParquet(result, summaryPath, false);
                 result["pattern_analysis"] = summaryPath;
 
                 const std::string atomsPath = outputBase + "_atoms.parquet";

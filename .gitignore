@@ -49,3 +49,9 @@ Thumbs.db
 # Generated analysis outputs
 output/
 *.log
+# Repowise
+.repowise
+
+# MCP and Claude
+.mcp.json
+.claude
